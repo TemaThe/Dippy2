@@ -48,17 +48,19 @@ Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bas
 
 ## Installation
 
-### Homebrew (recommended)
+### Homebrew
 
 ```bash
-brew tap ldayton/dippy
-brew install dippy
+brew tap TemaThe/dippy
+brew install dippy2
 ```
+
+Or install the original upstream: `brew tap ldayton/dippy && brew install dippy`
 
 ### Manual
 
 ```bash
-git clone https://github.com/ldayton/Dippy.git
+git clone https://github.com/TemaThe/Dippy.git
 ```
 
 ### Configure
@@ -71,7 +73,7 @@ Add to `~/.claude/settings.json` (or use `/hooks` interactively):
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "dippy" }]
+        "hooks": [{ "type": "command", "command": "dippy2" }]
       }
     ]
   }
@@ -130,5 +132,5 @@ When Claude runs `bash script.sh`, Dippy reads and analyzes every command inside
 Remove the hook entry from `~/.claude/settings.json`, then:
 
 ```bash
-brew uninstall dippy  # if installed via Homebrew
+brew uninstall dippy2  # if installed via Homebrew
 ```
