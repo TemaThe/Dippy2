@@ -103,6 +103,70 @@ SAFE_MODULES = frozenset(
 
 # Modules that are NEVER safe
 # Sources: Bandit blacklists, RestrictedPython, CVE research
+# Maps module root/name to a short reason for the "dangerous" classification.
+# Used to enrich the ask message so the LLM understands *why* a module is flagged.
+_DANGEROUS_REASONS: dict[str, str] = {
+    # Code execution
+    "subprocess": "can execute arbitrary shell commands",
+    "os": "can execute commands, read/write/delete files, modify env",
+    "sys": "can exit process, manipulate modules",
+    "shutil": "can copy/move/delete files and directory trees",
+    "runpy": "can execute arbitrary Python modules",
+    "compileall": "can compile and overwrite .pyc files",
+    "py_compile": "can compile and overwrite .pyc files",
+    "importlib": "can dynamically import and execute arbitrary code",
+    "pkgutil": "can walk and import packages dynamically",
+    "popen2": "legacy module — can execute shell commands",
+    "commands": "legacy module — can execute shell commands",
+    # File I/O
+    "pathlib": "can read/write/delete files",
+    "io": "can read/write files",
+    "fileinput": "can read and modify files in-place",
+    "tempfile": "can create files on disk",
+    "glob": "can discover files on filesystem",
+    "fnmatch": "used with glob for filesystem discovery",
+    "codecs": "codecs.open() can read/write files",
+    "linecache": "can read source files",
+    "inspect": "getsource/getsourcefile can read files",
+    "configparser": "can read config files from disk",
+    # Compression with file I/O
+    "gzip": "can read/write compressed files on disk",
+    "bz2": "can read/write compressed files on disk",
+    "lzma": "can read/write compressed files on disk",
+    "tarfile": "can extract files to disk (path traversal risk)",
+    "zipfile": "can extract files to disk (path traversal risk)",
+    # Network
+    "socket": "can open network connections",
+    "ssl": "can open encrypted network connections",
+    "http": "can make/serve HTTP requests",
+    "http.client": "can make HTTP requests",
+    "http.server": "can start an HTTP server",
+    "urllib": "can fetch URLs and read remote data",
+    "urllib.request": "can fetch URLs and read remote data",
+    "urllib.parse": "URL parsing (often paired with network access)",
+    "ftplib": "insecure cleartext FTP (Bandit B402)",
+    "smtplib": "can send emails",
+    "poplib": "can access email accounts",
+    "imaplib": "can access email accounts",
+    "nntplib": "insecure cleartext NNTP",
+    "telnetlib": "insecure cleartext telnet (Bandit B401)",
+    "socketserver": "can start network servers",
+    "xmlrpc": "XML-RPC with XXE vulnerabilities (Bandit B411)",
+    "ipaddress": "network address manipulation",
+    # XML parsing (XXE)
+    "xml": "vulnerable to XXE and billion-laughs XML bomb attacks (Bandit B405-B410)",
+    "xml.etree": "vulnerable to XXE and billion-laughs XML bomb attacks",
+    "xml.etree.ElementTree": "vulnerable to XXE and billion-laughs XML bomb attacks",
+    "xml.etree.cElementTree": "vulnerable to XXE and billion-laughs XML bomb attacks",
+    "xml.sax": "vulnerable to XXE attacks (Bandit B406)",
+    "xml.dom": "vulnerable to XXE attacks",
+    "xml.dom.minidom": "vulnerable to XXE attacks (Bandit B408)",
+    "xml.dom.pulldom": "vulnerable to XXE attacks (Bandit B409)",
+    "xml.dom.expatbuilder": "vulnerable to XXE attacks",
+    "xml.parsers": "vulnerable to XXE attacks",
+    "xml.parsers.expat": "vulnerable to XXE attacks (Bandit B410)",
+}
+
 DANGEROUS_MODULES = frozenset(
     {
         # === Code execution ===
@@ -470,13 +534,24 @@ class SafetyAnalyzer(ast.NodeVisitor):
             )
         )
 
+    @staticmethod
+    def _dangerous_msg(module: str, root: str) -> str:
+        reason = (
+            _DANGEROUS_REASONS.get(module)
+            or _DANGEROUS_REASONS.get(root)
+            or ""
+        )
+        if reason:
+            return f"dangerous module: {module} — {reason}"
+        return f"dangerous module: {module}"
+
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             module = alias.name
             root = module.split(".")[0]
 
             if module in DANGEROUS_MODULES or root in DANGEROUS_MODULES:
-                self._add(node, "import", f"dangerous module: {module}")
+                self._add(node, "import", self._dangerous_msg(module, root))
             elif module not in SAFE_MODULES and root not in SAFE_MODULES:
                 self._add(node, "import", f"unknown module: {module}")
 
@@ -491,7 +566,7 @@ class SafetyAnalyzer(ast.NodeVisitor):
         root = module.split(".")[0]
 
         if module in DANGEROUS_MODULES or root in DANGEROUS_MODULES:
-            self._add(node, "import", f"dangerous module: {module}")
+            self._add(node, "import", self._dangerous_msg(module, root))
         elif module not in SAFE_MODULES and root not in SAFE_MODULES:
             self._add(node, "import", f"unknown module: {module}")
 
