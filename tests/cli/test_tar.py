@@ -74,6 +74,13 @@ TESTS = [
     #
     # === UNSAFE: Delete from archive ===
     ("tar --delete -f archive.tar file.txt", False),
+    #
+    # === UNSAFE: Extract long-form alias --get ===
+    ("tar --get -f archive.tar", False),
+    #
+    # === UNSAFE: Bare tar (no operation detected) ===
+    ("tar", False),
+    ("tar -f archive.tar", False),  # no operation flag
 ]
 
 

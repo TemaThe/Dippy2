@@ -25,6 +25,9 @@ TESTS = [
     ("xxd -revert file.hex", False),
     ("xxd -r -p file.hex", False),
     ("xxd -r -s 100 file.hex output.bin", False),
+    #
+    # Bare xxd (no args, reads stdin - safe)
+    ("xxd", True),
 ]
 
 

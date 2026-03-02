@@ -200,6 +200,12 @@ TESTS = [
     ("xargs --exit cat", True),
     ("xargs -r -t cat", True),
     ("xargs -rt cat", True),  # combined short flags
+    # xargs with --open-tty long form
+    ("xargs --open-tty cat", False),
+    # xargs with --interactive long form variant
+    ("xargs --interactive=true cat", False),
+    # xargs with --open-tty long form variant
+    ("xargs --open-tty=true cat", False),
 ]
 
 

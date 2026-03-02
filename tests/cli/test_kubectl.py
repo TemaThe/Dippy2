@@ -217,6 +217,22 @@ TESTS = [
         "kubectl exec -n mynamespace pod -- pwd",
         True,
     ),  # namespace flag with safe command
+    #
+    # === Requested additions ===
+    #
+    ("kubectl apply -f f.yaml", False),  # apply is unsafe
+    ("kubectl exec pod -- ls", True),  # ls is safe inner command
+    ("kubectl exec pod -- rm foo", False),  # rm is unsafe inner command
+    #
+    # === k shorthand alias ===
+    #
+    ("k get pods", True),
+    ("k delete pod foo", False),
+    ("k exec pod -- ls", True),
+    #
+    # === bare kubectl ===
+    #
+    ("kubectl", False),  # bare kubectl -> ask
 ]
 
 

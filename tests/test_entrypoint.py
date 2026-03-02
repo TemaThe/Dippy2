@@ -113,7 +113,7 @@ class TestEndToEnd:
 
     def test_ask_unknown_command(self):
         """Unknown commands return ask decision."""
-        input_data = {"tool_name": "Bash", "tool_input": {"command": "rm -rf /"}}
+        input_data = {"tool_name": "Bash", "tool_input": {"command": "someunknowncommand123 arg1 arg2"}}
         result = run_hook(input_data)
         assert result.returncode == 0
         output = json.loads(result.stdout)

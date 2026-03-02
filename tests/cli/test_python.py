@@ -54,6 +54,8 @@ class TestPythonCodeExecution:
             "python -m timeit -s 'import os' 'os.getcwd()'",  # setup + stmt
             "python -m json.tool foo.json",  # reads files
             "python -m pydoc os",  # imports modules (executes top-level code)
+            "python3 -c 'print(1)'",  # -c always needs confirmation
+            "python3 -m http.server",  # http.server is unsafe module
         ],
     )
     def test_code_execution_needs_confirmation(self, check, cmd):
@@ -65,6 +67,19 @@ class TestPythonCodeExecution:
         """calendar module is truly inert - just prints a calendar."""
         result = check("python -m calendar")
         assert is_approved(result), "calendar module should be approved"
+
+    def test_script_with_unsafe_imports_blocked(self, check, tmp_path):
+        """Script importing http.server should be blocked."""
+        script = tmp_path / "server_script.py"
+        script.write_text("""
+import http.server
+import json
+
+handler = http.server.SimpleHTTPRequestHandler
+print("ready")
+""")
+        result = check(f"python3 {script}")
+        assert needs_confirmation(result), "http.server import should be blocked"
 
 
 class TestPythonScriptAnalysis:

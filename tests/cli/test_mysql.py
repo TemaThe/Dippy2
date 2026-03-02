@@ -47,6 +47,21 @@ TESTS = [
     ("mysql -e 'SELECT 1; SELECT 2'", False),
     # LOAD DATA - unsafe (reads files into tables)
     ("mysql -e 'LOAD DATA INFILE \"/tmp/data.csv\" INTO TABLE users'", False),
+    #
+    # === Requested additions ===
+    #
+    # Interactive mysql with user and password (no -e -> interactive -> unsafe)
+    ("mysql -u user -p", False),
+    # Write query with -e is unsafe
+    ("mysql -e 'INSERT INTO t VALUES(1)'", False),
+    #
+    # === Edge cases ===
+    #
+    # -e with attached SQL (no space): -e'SELECT 1' -> quotes included, unknown query
+    ("mysql -e'SELECT 1'", False),
+    # --execute= form with quotes
+    ("mysql --execute='SHOW TABLES'", True),
+    ("mysql --execute='DROP TABLE t'", False),
 ]
 
 

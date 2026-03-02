@@ -87,6 +87,12 @@ TESTS = [
     # === UNSAFE: CA operations ===
     ("openssl ca -in csr.pem -out cert.pem", False),
     ("openssl crl -in crl.pem -text", False),
+    #
+    # === UNSAFE: Bare openssl (no subcommand) ===
+    ("openssl", False),
+    #
+    # === UNSAFE: Key generation without -out (stdout) ===
+    ("openssl genrsa 2048", False),
 ]
 
 

@@ -543,3 +543,72 @@ class TestIdentifierQuoting:
     def test_bracket_table_name(self):
         sql = "SELECT * FROM [INSERT]"
         assert is_readonly_sql(sql) is True
+
+
+class TestMultipleStatementsDetailed:
+    """Detailed tests for semicolon-separated multiple statements."""
+
+    def test_three_selects(self):
+        """Three SELECT statements should return None."""
+        sql = "SELECT 1; SELECT 2; SELECT 3"
+        assert is_readonly_sql(sql) is None
+
+    def test_select_then_insert(self):
+        """SELECT then INSERT should return None."""
+        sql = "SELECT * FROM t; INSERT INTO t VALUES (1)"
+        assert is_readonly_sql(sql) is None
+
+
+class TestCTEEdgeCases:
+    """Edge cases for CTE parsing."""
+
+    def test_cte_with_nested_parens(self):
+        """CTE body with nested parentheses should parse correctly."""
+        sql = "WITH t AS (SELECT (1 + 2) * (3 + 4) AS val) SELECT * FROM t"
+        assert is_readonly_sql(sql) is True
+
+    def test_multiple_ctes_with_comma(self):
+        """Multiple CTEs separated by commas."""
+        sql = "WITH t AS (SELECT 1), s AS (SELECT 2) SELECT * FROM t, s"
+        assert is_readonly_sql(sql) is True
+
+    def test_unclosed_cte_paren(self):
+        """Unclosed CTE parenthesis should return None (parse failure)."""
+        sql = "WITH t AS (SELECT 1 SELECT * FROM t"
+        assert is_readonly_sql(sql) is None
+
+    def test_cte_with_write(self):
+        """CTE followed by write should be False."""
+        sql = "WITH t AS (SELECT 1) INSERT INTO r SELECT * FROM t"
+        assert is_readonly_sql(sql) is False
+
+
+class TestUnknownLeadingKeyword:
+    """Tests for unknown leading keywords."""
+
+    def test_pragma_unknown_by_default(self):
+        """PRAGMA without extra keywords returns None."""
+        assert is_readonly_sql("PRAGMA table_info(users)") is None
+
+    def test_call_unknown(self):
+        """CALL returns None."""
+        assert is_readonly_sql("CALL my_procedure()") is None
+
+    def test_exec_unknown(self):
+        """EXEC returns None."""
+        assert is_readonly_sql("EXEC sp_helpdb") is None
+
+    def test_starts_with_non_keyword(self):
+        """Statement starting with non-alpha should return None."""
+        assert is_readonly_sql("123 invalid") is None
+
+    def test_cte_with_just_whitespace_after(self):
+        """CTE with only whitespace after definitions."""
+        sql = "WITH t AS (SELECT 1) "
+        # Incomplete - no main statement after CTE
+        assert is_readonly_sql(sql) is None
+
+    def test_semicolon_with_content_after_whitespace(self):
+        """Semicolon followed by whitespace then content."""
+        sql = "SELECT 1;  SELECT 2"
+        assert is_readonly_sql(sql) is None

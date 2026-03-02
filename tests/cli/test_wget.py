@@ -78,6 +78,8 @@ TESTS = [
     ("wget --spider --user-agent='Mozilla' https://example.com", True),
     # Spider with multiple URLs - safe
     ("wget --spider https://example.com https://example.org", True),
+    # Unsafe - explicit output file with space-separated --output-document
+    ("wget --output-document out.txt https://example.com", False),
 ]
 
 

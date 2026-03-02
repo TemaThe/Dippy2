@@ -1925,3 +1925,374 @@ class TestAlias:
         m = match_command(c, cfg, tmp_path)
         assert m is not None
         assert m.decision == "allow"
+
+
+class TestConfigFileErrors:
+    """Test config file I/O error handling."""
+
+    def test_permission_error_reading_config(self, tmp_path):
+        """PermissionError reading config should raise ConfigError."""
+        from dippy.core.config import _load_config_file
+
+        config_file = tmp_path / "config"
+        config_file.write_text("allow ls")
+        config_file.chmod(0o000)
+        try:
+            with pytest.raises(ConfigError, match="permission denied"):
+                _load_config_file(config_file)
+        finally:
+            config_file.chmod(0o644)
+
+    def test_oserror_reading_config(self, tmp_path, monkeypatch):
+        """OSError reading config should raise ConfigError."""
+        from dippy.core.config import _load_config_file
+
+        config_file = tmp_path / "config"
+        config_file.write_text("allow ls")
+
+        def broken_read_text(*a, **kw):
+            raise OSError("disk I/O error")
+
+        monkeypatch.setattr(Path, "read_text", broken_read_text)
+        with pytest.raises(ConfigError, match="cannot read config"):
+            _load_config_file(config_file)
+
+    def test_load_config_permission_error_user_config(self, tmp_path, monkeypatch):
+        """PermissionError checking user config raises ConfigError."""
+        import dippy.core.config
+
+        bad_path = tmp_path / "no_access"
+        bad_path.mkdir()
+        bad_path.chmod(0o000)
+        fake_config = bad_path / "config"
+        monkeypatch.setattr(dippy.core.config, "USER_CONFIG", fake_config)
+        try:
+            with pytest.raises(ConfigError, match="permission denied"):
+                load_config(tmp_path)
+        finally:
+            bad_path.chmod(0o755)
+
+    def test_load_config_permission_error_env_config(self, tmp_path, monkeypatch):
+        """PermissionError checking env config raises ConfigError."""
+        import dippy.core.config
+
+        monkeypatch.setattr(
+            dippy.core.config, "USER_CONFIG", tmp_path / "no-such-config"
+        )
+
+        env_dir = tmp_path / "no_access"
+        env_dir.mkdir()
+        env_dir.chmod(0o000)
+        env_config = env_dir / "config"
+        monkeypatch.setenv("DIPPY_CONFIG", str(env_config))
+        try:
+            with pytest.raises(ConfigError, match="permission denied"):
+                load_config(tmp_path)
+        finally:
+            env_dir.chmod(0o755)
+
+
+class TestMalformedDirectives:
+    """Test parsing of malformed directives."""
+
+    def test_bare_allow(self, caplog):
+        """'allow' with no pattern should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("allow")
+        assert len(cfg.rules) == 0
+        assert "requires a pattern" in caplog.text
+
+    def test_bare_ask(self, caplog):
+        """'ask' with no pattern should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("ask")
+        assert len(cfg.rules) == 0
+        assert "requires a pattern" in caplog.text
+
+    def test_bare_deny(self, caplog):
+        """'deny' with no pattern should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("deny")
+        assert len(cfg.rules) == 0
+        assert "requires a pattern" in caplog.text
+
+    def test_bare_allow_redirect(self, caplog):
+        """'allow-redirect' with no pattern should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("allow-redirect")
+        assert len(cfg.redirect_rules) == 0
+        assert "requires a pattern" in caplog.text
+
+    def test_bare_ask_redirect(self, caplog):
+        """'ask-redirect' with no pattern should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("ask-redirect")
+        assert len(cfg.redirect_rules) == 0
+        assert "requires a pattern" in caplog.text
+
+    def test_bare_deny_redirect(self, caplog):
+        """'deny-redirect' with no pattern should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("deny-redirect")
+        assert len(cfg.redirect_rules) == 0
+        assert "requires a pattern" in caplog.text
+
+    def test_unknown_directive(self, caplog):
+        """Unknown directive should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("foobar some-pattern")
+        assert len(cfg.rules) == 0
+        assert "unknown directive" in caplog.text
+
+
+class TestAllowPythonModule:
+    """Test allow-python-module directive."""
+
+    def test_allow_python_module(self):
+        """allow-python-module should add to python_allow_modules set."""
+        cfg = parse_config("allow-python-module numpy")
+        assert "numpy" in cfg.python_allow_modules
+
+    def test_allow_python_module_multiple(self):
+        """Multiple allow-python-module directives should accumulate."""
+        cfg = parse_config(
+            "allow-python-module numpy\nallow-python-module pandas"
+        )
+        assert "numpy" in cfg.python_allow_modules
+        assert "pandas" in cfg.python_allow_modules
+
+    def test_allow_python_module_bare(self, caplog):
+        """Bare allow-python-module should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("allow-python-module")
+        assert len(cfg.python_allow_modules) == 0
+        assert "requires a module name" in caplog.text
+
+
+class TestSettingEdgeCases:
+    """Test edge cases for set directive."""
+
+    def test_set_bare(self, caplog):
+        """'set' with nothing should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("set")
+        assert "requires a setting name" in caplog.text
+
+    def test_set_log_full_with_value(self, caplog):
+        """'set log_full extra' should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("set log_full extra_value")
+        assert "takes no value" in caplog.text
+
+    def test_set_unknown_setting(self, caplog):
+        """Unknown setting should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("set nonexistent_setting value")
+        assert "unknown setting" in caplog.text
+
+
+class TestExtractMessage:
+    """Test _extract_message with escaped quotes."""
+
+    def test_escaped_quote_in_message(self):
+        """Escaped quote in message should be unescaped."""
+        from dippy.core.config import _extract_message
+
+        pattern, message = _extract_message(r'rm * "says \"hello\""')
+        assert pattern == "rm *"
+        assert message == 'says "hello"'
+
+    def test_escaped_backslash_in_message(self):
+        """Escaped backslash in message should produce single backslash."""
+        from dippy.core.config import _extract_message
+
+        pattern, message = _extract_message(r'rm * "path\\file"')
+        assert pattern == "rm *"
+        assert message == "path\\file"
+
+    def test_no_message(self):
+        """No trailing quote should return None message."""
+        from dippy.core.config import _extract_message
+
+        pattern, message = _extract_message("rm *")
+        assert pattern == "rm *"
+        assert message is None
+
+    def test_escaped_trailing_quote(self):
+        """Escaped trailing quote should not be treated as message end."""
+        from dippy.core.config import _extract_message
+
+        pattern, message = _extract_message('rm *\\"')
+        assert message is None
+
+
+class TestUnescape:
+    """Test _unescape helper."""
+
+    def test_double_backslash(self):
+        """Double backslash should produce single backslash."""
+        from dippy.core.config import _unescape
+
+        assert _unescape("foo\\\\bar") == "foo\\bar"
+
+    def test_escaped_quote(self):
+        """Escaped quote should produce quote."""
+        from dippy.core.config import _unescape
+
+        assert _unescape('foo\\"bar') == 'foo"bar'
+
+    def test_no_escapes(self):
+        """String without escapes should pass through."""
+        from dippy.core.config import _unescape
+
+        assert _unescape("hello world") == "hello world"
+
+
+class TestGlobToRegexBranches:
+    """Test _glob_to_regex with **, ?, and [] patterns in redirect matching."""
+
+    def test_doublestar_with_question_mark(self, tmp_path):
+        """** pattern with ? should match single non-slash char."""
+        cfg = Config(redirect_rules=[Rule("allow", "**/?.txt")])
+        assert match_redirect("/a/b/c/x.txt", cfg, tmp_path) is not None
+        # ? matches exactly one char, so single-char name matches
+        assert match_redirect("/dir/a.txt", cfg, tmp_path) is not None
+
+    def test_doublestar_with_character_class(self, tmp_path):
+        """** pattern with [] should match character class."""
+        cfg = Config(redirect_rules=[Rule("allow", "**/[abc].txt")])
+        assert match_redirect("/dir/a.txt", cfg, tmp_path) is not None
+        assert match_redirect("/dir/d.txt", cfg, tmp_path) is None
+
+    def test_doublestar_with_negated_class(self, tmp_path):
+        """** pattern with [!...] should match negated class."""
+        cfg = Config(redirect_rules=[Rule("allow", "**/[!0-9].txt")])
+        assert match_redirect("/dir/a.txt", cfg, tmp_path) is not None
+        assert match_redirect("/dir/1.txt", cfg, tmp_path) is None
+
+    def test_doublestar_with_unclosed_bracket(self, tmp_path):
+        """** pattern with unclosed [ should treat as literal."""
+        cfg = Config(redirect_rules=[Rule("allow", "**/[abc")])
+        # Unclosed bracket treated as literal, won't match
+        assert match_redirect("/dir/a", cfg, tmp_path) is None
+
+    def test_doublestar_with_bracket_starting_close(self, tmp_path):
+        """** pattern with []] (bracket starting with ]) should work."""
+        cfg = Config(redirect_rules=[Rule("allow", "**/[]ab]")])
+        assert match_redirect("/dir/]", cfg, tmp_path) is not None
+        assert match_redirect("/dir/a", cfg, tmp_path) is not None
+
+
+class TestSetLogFullValid:
+    """Test the successful set log_full path."""
+
+    def test_set_log_full(self):
+        """'set log_full' without value should set log_full=True."""
+        cfg = parse_config("set log_full")
+        assert cfg.log_full is True
+
+
+class TestMatchAfterEmptyWords:
+    """Test match_after with empty words list."""
+
+    def test_empty_words(self, tmp_path):
+        """match_after with empty words should return None."""
+        cfg = Config(after_rules=[Rule("after", "git *", message="msg")])
+        result = match_after([], cfg, tmp_path)
+        assert result is None
+
+
+class TestMatchAfterPrefixMatching:
+    """Test match_after with non-glob after rules (prefix matching)."""
+
+    def test_after_prefix_match(self, tmp_path):
+        """after git (no globs) should match 'git status' by prefix."""
+        cfg = Config(after_rules=[Rule("after", "git", message="git ran")])
+        result = match_after(["git", "status"], cfg, tmp_path)
+        assert result == "git ran"
+
+    def test_after_exact_bare_command(self, tmp_path):
+        """after git (no globs) should match bare 'git'."""
+        cfg = Config(after_rules=[Rule("after", "git", message="git ran")])
+        result = match_after(["git"], cfg, tmp_path)
+        assert result == "git ran"
+
+
+class TestLogDecisionWithMessage:
+    """Test log_decision with message parameter."""
+
+    def test_log_decision_with_message(self, tmp_path):
+        """log_decision should include message in log entry."""
+        import json
+
+        cfg = Config(log=tmp_path / "test.jsonl")
+        configure_logging(cfg)
+        log_decision("ask", "rm foo", rule="deny rm *", message="danger")
+        log_file = tmp_path / "test.jsonl"
+        assert log_file.exists()
+        entry = json.loads(log_file.read_text().strip())
+        assert entry["decision"] == "ask"
+        assert entry["message"] == "danger"
+        assert entry["rule"] == "deny rm *"
+
+
+class TestConfigureLoggingErrors:
+    """Test configure_logging error handling."""
+
+    def test_configure_logging_oserror(self, tmp_path, monkeypatch):
+        """OSError creating log directory should disable logging."""
+        from dippy.core import config as config_mod
+
+        cfg = Config(log=tmp_path / "no_access" / "dir" / "deep" / "log.jsonl")
+
+        # Make parent unwritable
+        no_access = tmp_path / "no_access"
+        no_access.mkdir()
+        no_access.chmod(0o000)
+        try:
+            configure_logging(cfg)
+            # Logging should be disabled now
+            assert config_mod._log_disabled is True
+        finally:
+            no_access.chmod(0o755)
+
+    def test_log_decision_oserror(self, tmp_path, monkeypatch):
+        """OSError writing log should disable future logging."""
+        from dippy.core import config as config_mod
+
+        cfg = Config(log=tmp_path / "log.jsonl")
+        configure_logging(cfg)
+        assert config_mod._log_config is not None
+
+        # Make the log file unwritable
+        log_file = tmp_path / "log.jsonl"
+        log_file.write_text("")
+        log_file.chmod(0o000)
+        try:
+            log_decision("allow", "ls")
+            # Should silently fail and disable logging
+            assert config_mod._log_disabled is True
+        finally:
+            log_file.chmod(0o644)

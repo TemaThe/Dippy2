@@ -298,3 +298,89 @@ class TestAnalyzeWithUnfold:
         """'bash -l' should not attempt unfolding."""
         result = analyze("bash -l", Config(), Path("/tmp"))
         assert result.action == "ask"
+
+
+class TestReadScriptErrors:
+    """Test error paths in read_script."""
+
+    def test_oserror_on_stat(self, tmp_path):
+        """OSError on stat should return error."""
+        script = tmp_path / "unreadable.sh"
+        script.write_text("echo hello\n")
+        script.chmod(0o000)
+        try:
+            contents, error = read_script(script)
+            # On macOS, stat may still work but read may fail
+            if contents is None:
+                assert error is not None
+        finally:
+            script.chmod(0o644)
+
+    def test_oserror_on_read(self, tmp_path):
+        """Unreadable file should return error."""
+        script = tmp_path / "noperm.sh"
+        script.write_text("echo hello\n")
+        script.chmod(0o000)
+        try:
+            contents, error = read_script(script)
+            if contents is None:
+                assert error is not None
+        finally:
+            script.chmod(0o644)
+
+    def test_empty_script_produces_allow(self, tmp_path):
+        """Empty script with no commands should produce allow."""
+        script = tmp_path / "empty.sh"
+        script.write_text("\n\n\n")
+        result = analyze_script_file(script, Config(), tmp_path)
+        assert result.action == "allow"
+
+    def test_oserror_stat_via_monkeypatch(self, tmp_path, monkeypatch):
+        """OSError during stat should return read error."""
+        script = tmp_path / "statfail.sh"
+        script.write_text("echo hello\n")
+
+        # Only patch stat(), not exists() or is_file() or is_symlink()
+        original_stat = type(script).stat
+
+        call_count = 0
+
+        def broken_stat(self, *a, **kw):
+            nonlocal call_count
+            if self.name == "statfail.sh":
+                call_count += 1
+                # The first stat calls come from exists/is_file/is_symlink;
+                # the explicit stat() call in read_script is the 4th+ call
+                if call_count > 3:
+                    raise OSError("disk error")
+            return original_stat(self, *a, **kw)
+
+        monkeypatch.setattr(type(script), "stat", broken_stat)
+        contents, error = read_script(script)
+        assert contents is None
+        assert "cannot stat" in error
+
+    def test_oserror_read_via_monkeypatch(self, tmp_path, monkeypatch):
+        """OSError during read_text should return error."""
+        script = tmp_path / "readfail.sh"
+        script.write_text("echo hello\n")
+
+        original_read = Path.read_text
+
+        def broken_read(self, *a, **kw):
+            if self.name == "readfail.sh":
+                raise OSError("read error")
+            return original_read(self, *a, **kw)
+
+        monkeypatch.setattr(Path, "read_text", broken_read)
+        contents, error = read_script(script)
+        assert contents is None
+        assert error is not None
+
+    def test_parsed_empty_nodes_produces_allow(self, tmp_path):
+        """Script that parses to empty nodes should produce allow."""
+        # A script with only comments produces empty nodes
+        script = tmp_path / "comments_only.sh"
+        script.write_text("# comment 1\n# comment 2\n")
+        result = analyze_script_file(script, Config(), tmp_path)
+        assert result.action == "allow"

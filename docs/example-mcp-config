@@ -1,0 +1,75 @@
+# Dippy MCP tool rules example
+#
+# Append to ~/.dippy/config (global) or .dippy (project root).
+# These rules control auto-approval of MCP server tool calls.
+#
+# Format: allow-mcp/deny-mcp/ask-mcp <tool_name_glob> ["message"]
+# Tool names follow Claude Code's naming: mcp__<server>__<tool>
+
+#---- Global deny (destructive operations) ----#
+deny-mcp mcp__*__delete_* "No MCP deletions without manual review"
+
+#---- Atlassian (Jira + Confluence read-only) ----#
+allow-mcp mcp__atlassian__jira_get*
+allow-mcp mcp__atlassian__jira_list*
+allow-mcp mcp__atlassian__jira_search*
+allow-mcp mcp__atlassian__confluence_get*
+allow-mcp mcp__atlassian__confluence_list*
+allow-mcp mcp__atlassian__confluence_search*
+
+#---- GitLab (read-only + graphql) ----#
+allow-mcp mcp__gitlab__get*
+allow-mcp mcp__gitlab__list*
+allow-mcp mcp__gitlab__search*
+allow-mcp mcp__gitlab__verify_namespace
+allow-mcp mcp__gitlab__execute_graphql
+
+#---- Grafana (read-only + queries) ----#
+allow-mcp mcp__grafana__get*
+allow-mcp mcp__grafana__list*
+allow-mcp mcp__grafana__search*
+allow-mcp mcp__grafana__query*
+allow-mcp mcp__grafana__generate_deeplink
+
+#---- Serena (LSP-based code intelligence) ----#
+# search & navigation
+allow-mcp mcp__serena__find_symbol
+allow-mcp mcp__serena__find_referencing_symbols
+allow-mcp mcp__serena__find_referencing_code_snippets
+allow-mcp mcp__serena__get_symbols_overview
+allow-mcp mcp__serena__get_current_config
+allow-mcp mcp__serena__search_for_pattern
+allow-mcp mcp__serena__list_dir
+allow-mcp mcp__serena__find_file
+# JetBrains IDE integration
+allow-mcp mcp__serena__jet_brains_find_symbol
+allow-mcp mcp__serena__jet_brains_find_referencing_symbols
+allow-mcp mcp__serena__jet_brains_get_symbols_overview
+allow-mcp mcp__serena__jet_brains_type_hierarchy
+# refactoring
+allow-mcp mcp__serena__rename_symbol
+# persistent memory
+allow-mcp mcp__serena__list_memories
+allow-mcp mcp__serena__read_memory
+allow-mcp mcp__serena__write_memory
+allow-mcp mcp__serena__edit_memory
+allow-mcp mcp__serena__rename_memory
+allow-mcp mcp__serena__delete_memory
+# utilities
+allow-mcp mcp__serena__open_dashboard
+allow-mcp mcp__serena__onboarding
+allow-mcp mcp__serena__initial_instructions
+allow-mcp mcp__serena__check_onboarding_performed
+allow-mcp mcp__serena__restart_language_server
+
+#---- Sequential Thinking ----#
+allow-mcp mcp__sequential-thinking__sequentialthinking
+
+#---- GrepAI (semantic code search) ----#
+allow-mcp mcp__grepai__grepai_*
+
+#---- Playwright (browser testing) ----#
+allow-mcp mcp__plugin_playwright_playwright__browser_*
+
+#---- Context7 (library docs) ----#
+allow-mcp mcp__context7__*

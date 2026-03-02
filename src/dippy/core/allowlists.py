@@ -235,6 +235,7 @@ SIMPLE_SAFE = frozenset(
         "sleep",  # delay for specified time
         "read",  # read line from stdin
         "test",  # evaluate conditional expression
+        "wait",  # wait for background jobs to finish
         "yes",  # output string repeatedly
         # === Terminal ===
         "banner",  # print large ASCII art banner

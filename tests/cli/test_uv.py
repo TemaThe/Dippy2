@@ -156,6 +156,36 @@ TESTS = [
     #
     # === UNSAFE: Self management ===
     ("uv self update", False),
+    #
+    # === SAFE: Bare subcommands that show help ===
+    ("uv cache", True),  # bare cache -> safe (shows help)
+    ("uv python", True),  # bare python -> safe (shows help)
+    #
+    # === UNSAFE: Bare subcommands with unsafe fallback ===
+    ("uv pip install --upgrade-package foo", False),
+    #
+    # === SAFE: uv run with --python flag and safe inner command ===
+    ("uv run --python 3.11 ls", True),
+    ("uv run -p 3.12 echo hello", True),
+    #
+    # === UNSAFE: uv run with --python flag and unsafe inner command ===
+    ("uv run --python 3.11 python script.py", False),
+    #
+    # === UNSAFE: uv run with only flags, no inner command ===
+    ("uv run --python 3.11", False),  # no inner command
+    ("uv run --with requests", False),  # no inner command
+    #
+    # === SAFE: uv run with --directory flag ===
+    ("uv run --directory /tmp ls", True),
+    #
+    # === SAFE: uv run with = style flags ===
+    ("uv run --python=3.11 ls", True),
+    #
+    # === UNSAFE: uv pip with unknown subcommand ===
+    ("uv pip something-unknown", False),
+    #
+    # === SAFE: Version flag variants ===
+    ("uv -v", True),
 ]
 
 

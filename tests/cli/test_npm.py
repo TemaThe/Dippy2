@@ -320,6 +320,32 @@ TESTS = [
     ("pnpm link", False),
     ("pnpm unlink", False),
     ("pnpm store prune", False),
+    #
+    # === Requested additions ===
+    #
+    # npm exec with package and -- command
+    ("npm exec pkg -- cmd", False),  # exec is unsafe
+    ("npm exec -- prettier --write .", False),
+    # pnpm run build
+    ("pnpm run build", False),  # run build is unsafe
+    ("pnpm run test", False),
+    # pnpm install
+    ("pnpm install", False),
+    #
+    # === Edge cases: bare commands ===
+    #
+    ("npm", False),  # bare npm -> ask
+    ("yarn", False),  # bare yarn -> ask
+    ("pnpm", False),  # bare pnpm -> ask
+    #
+    # === owner bare (lists by default) ===
+    #
+    ("npm owner", True),  # owner alone lists
+    #
+    # === version subcommands (unsafe modifiers) ===
+    #
+    ("npm version premajor", False),
+    ("npm version prerelease", False),
 ]
 
 

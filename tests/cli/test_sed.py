@@ -51,6 +51,11 @@ TESTS = [
     ("sed -E -i 's/[0-9]+/NUM/' file.txt", False),
     ("sed -n -i 's/pattern/replacement/p' file.txt", False),
     ("sed -i'' 's/foo/bar/' file.txt", False),  # BSD style
+    #
+    # === Additional edge cases ===
+    ("sed -e 's/a/b/' file.txt", True),  # -e with simple expression (safe)
+    ("sed -i 's/a/b/' f.txt", False),  # In-place write (unsafe)
+    ("sed -f script.sed input.txt", True),  # Script file, read-only (safe)
 ]
 
 

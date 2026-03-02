@@ -1,0 +1,273 @@
+# Dippy global config example
+#
+# Copy this file to ~/.dippy/config (global) or .dippy (project root).
+# Global config applies everywhere; project config overrides it locally.
+#
+# NOTE: Many commands are already handled by Dippy's built-in allowlist
+# (~200 read-only commands like ls, cat, grep, jq, etc.) and by
+# CLI-specific handlers (git, docker, kubectl, helm, curl, etc.).
+# Only add rules for commands that aren't covered or to override defaults.
+#
+# IMPORTANT: Dippy does NOT support inline comments.
+# Comments must be on their own line.
+
+#---- Denied (blocked with AI-readable message) ----#
+deny sudo "sudo is blocked. Running as root is never allowed - find a non-root alternative"
+deny rm -rf /* "Too dangerous - be more specific"
+deny git push --force * "Use --force-with-lease instead"
+deny git push -f * "Use --force-with-lease instead"
+deny git reset --hard * "Confirm before discarding changes"
+# destructive disk write
+deny dd if=*
+# overly permissive
+deny chmod 777 * "Don't use 777 permissions"
+# listening socket
+deny nc -l * "Don't open listening sockets"
+# privileged containers
+deny docker run --privileged * "Don't run privileged containers"
+
+# Python: block inline -c (forces writing .py files, better for review)
+deny python -c "Write code to a .py file instead of using -c"
+deny python3 -c "Write code to a .py file instead of using -c"
+deny uv run python -c "Write code to a .py file instead of using -c"
+deny uv run python3 -c "Write code to a .py file instead of using -c"
+
+#---- Denied Redirects (file writes blocked) ----#
+deny-redirect **/.env* "Never write secrets to env files"
+deny-redirect **/*credential* "Never write credentials"
+deny-redirect **/*secret* "Never write secrets"
+deny-redirect ~/.ssh/id_* "Never overwrite SSH keys"
+deny-redirect /etc/** "System config is off-limits"
+
+#---- Ask (require confirmation) ----#
+ask-redirect ~/.* "Modifying dotfiles requires review"
+ask-redirect **/.config/* "Modifying config files requires review"
+ask ssh * "SSH requires confirmation"
+ask git push * "Confirm before pushing"
+
+#---- Python ----#
+# run installed Python modules (venv, pip, pytest, etc.)
+allow python3 -m *
+allow python -m *
+
+#---- Go Toolchain ----#
+allow go test
+allow go vet
+allow go doc
+allow go list
+allow go build
+allow go mod graph
+allow go mod why
+allow go tool
+
+#---- Go Linters & Tools ----#
+allow staticcheck
+allow golangci-lint
+allow deadcode
+allow callgraph
+allow guru
+allow gopls
+
+#---- Java Toolchain ----#
+allow javac
+allow java
+allow javap
+allow jar
+allow mvn
+allow jdeps
+allow jstack
+
+#---- Build & Code Gen ----#
+allow make
+allow protoc
+allow plantuml
+allow cmake
+allow ninja
+allow meson
+allow tsc
+
+#---- kubectl (subcommands not covered by handler) ----#
+allow kubectl events
+allow kubectl debug
+allow kubectl port-forward
+
+#---- Shell builtins (not in built-in allowlist) ----#
+allow export
+allow break|
+allow continue|
+allow wait
+# syntax check only, no execution
+allow bash -n **
+
+#---- File operations ----#
+allow mkdir
+allow touch
+allow cp *
+allow mv *
+
+#---- Docker (local dev) ----#
+# handler auto-approves compose/restart/start/stop/inspect/logs/ps/stats
+allow docker exec
+
+#---- Git (safe write operations) ----#
+# handler auto-approves all read-only git commands
+allow git pull
+allow git stash
+allow git add
+allow git commit
+allow git branch
+allow git checkout
+allow git merge
+allow git rebase *
+allow git worktree add *
+
+#---- Linters & Static Analysis ----#
+allow shellcheck
+allow markdownlint
+allow gosec
+
+#---- Code Search ----#
+allow zoekt
+allow zoekt-git-index
+allow grepai
+
+#---- Read-only tools ----#
+allow delta
+allow difft
+allow stern
+allow mdcat
+allow fswatch
+allow envsubst
+allow ctags
+allow memory_pressure
+allow gdu
+
+#---- Kubernetes tools ----#
+allow kubectx
+allow kubens
+allow kustomize
+
+#---- gRPC / Protobuf ----#
+allow grpcurl
+allow evans
+allow grpcui
+allow buf lint
+allow buf breaking
+allow buf build
+allow buf format
+
+#---- Misc dev tools ----#
+allow trasher
+allow pandoc
+allow playwright-cli
+
+#---- Media & Network tools ----#
+allow yt-dlp
+allow ffmpeg
+allow ollama
+allow nmap
+allow ncat
+
+#---- Terminal & Shell ----#
+allow watch
+allow tmux
+allow screen
+
+#---- Version Managers ----#
+allow jenv
+
+#---- JS/TS Runtimes ----#
+allow node
+allow npx
+allow pnpx
+allow corepack
+allow deno
+
+#---- Other Languages ----#
+allow opam
+
+#---- Diagrams & Reports ----#
+allow excalidraw-converter
+allow allure
+
+#---- HTTP & Network ----#
+allow http
+allow https
+allow nc
+# curl to localhost only (safe for local dev APIs)
+allow curl * http://localhost*
+allow curl * https://localhost*
+allow curl * http://127.0.0.1*
+allow curl * https://127.0.0.1*
+
+#---- NATS ----#
+allow nats
+ask nats * delete * "NATS delete - confirm?"
+ask nats * rm * "NATS remove - confirm?"
+ask nats * purge * "NATS purge - confirm?"
+
+#---- GitLab CLI (read-only commands) ----#
+allow glab mr list
+allow glab mr view
+allow glab mr diff
+allow glab mr issues
+allow glab mr approvers
+allow glab mr for
+allow glab issue list
+allow glab issue view
+allow glab issue board
+allow glab ci
+allow glab pipeline
+allow glab repo list
+allow glab repo view
+allow glab repo clone
+allow glab repo contributors
+allow glab repo search
+allow glab label list
+allow glab incident list
+allow glab incident view
+allow glab iteration list
+allow glab release list
+allow glab release view
+allow glab release download
+allow glab variable list
+allow glab variable get
+allow glab variable export
+allow glab schedule list
+allow glab job artifact
+allow glab user events
+allow glab token list
+allow glab deploy-key list
+allow glab deploy-key get
+allow glab ssh-key list
+allow glab ssh-key get
+allow glab cluster
+allow glab changelog generate
+allow glab securefile list
+allow glab securefile get
+allow glab stack list
+allow glab duo ask
+allow glab auth status
+allow glab config get
+allow glab alias list
+allow glab alias expand
+allow glab version
+allow glab check-update
+allow glab completion
+
+#---- Temp file writes & build outputs ----#
+allow-redirect /tmp/**
+allow-redirect .cache/**
+allow-redirect ./build/**
+allow-redirect ./dist/**
+allow-redirect **/*.log
+
+#---- Project-specific (customize these) ----#
+# allow-redirect ~/my-projects/**
+# allow ~/my-projects/**/*.sh
+# allow bash ~/my-projects/**/*.sh
+allow chmod +x **.sh
+
+#---- After rules (PostToolUse feedback to AI) ----#
+# after git push * "Re-read the prompt file for next steps"
+# after git commit * "Update your todo list"

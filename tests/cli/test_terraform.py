@@ -109,6 +109,9 @@ TESTS = [
     ("terraform login app.terraform.io", False),
     ("terraform logout", False),
     ("terraform logout app.terraform.io", False),
+    # Edge cases
+    ("terraform", False),  # No subcommand
+    ("terraform -chdir=dir plan", True),  # -chdir with safe action
 ]
 
 

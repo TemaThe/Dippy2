@@ -555,6 +555,19 @@ TESTS = [
     ("gh api repos/owner/repo --input payload.json", False),
     ("gh api graphql -f query='mutation { ... }'", False),
     #
+    # gh api - POST with -X is unsafe
+    ("gh api -X POST repos/o/r", False),
+    # gh api - GraphQL mutation with -f query= is unsafe
+    ("gh api -f query='mutation{createIssue(input:{}){issue{id}}}'", False),
+    # gh api - plain GET (no flags) is safe
+    ("gh api repos/o/r", True),
+    #
+    # --- gh bare command ---
+    ("gh", False),  # bare gh -> ask
+    #
+    # --- gh with only global flags ---
+    ("gh -R owner/repo", False),  # no subcommand found -> ask
+    #
     # --- gh help/version flags ---
     ("gh --help", True),
     ("gh -h", True),

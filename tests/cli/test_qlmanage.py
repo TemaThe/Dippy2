@@ -15,6 +15,12 @@ TESTS = [
     ("qlmanage -h", True),
     # Unsafe operations (reset server)
     ("qlmanage -r", False),
+    #
+    # Safe: bare qlmanage (no recognized flag, defaults to allow)
+    ("qlmanage", True),
+    #
+    # Safe: -x is not a recognized flag, but -p is hit first when combined
+    ("qlmanage -p -x file.pdf", True),  # -p is safe, checked first
 ]
 
 

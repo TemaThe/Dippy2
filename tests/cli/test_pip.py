@@ -177,6 +177,21 @@ TESTS = [
     ("pip3 install -r requirements.txt", False),
     ("pip3 download requests", False),
     ("pip3 wheel requests", False),
+    #
+    # === Edge cases: bare pip (no args) ===
+    ("pip", False),  # No args = ask
+    #
+    # === SAFE: pip cache list ===
+    ("pip cache list numpy", True),
+    #
+    # === UNSAFE: pip config set ===
+    ("pip config set global.timeout 60", False),
+    #
+    # === SAFE: uv pip list ===
+    ("uv pip list", True),
+    #
+    # === UNSAFE: uv pip install ===
+    ("uv pip install pkg", False),
 ]
 
 

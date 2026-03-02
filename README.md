@@ -1,11 +1,74 @@
-<p align="center">
-  <img src="images/dippy.gif" width="200">
-</p>
 
-<h1 align="center">🐤 Dippy</h1>
 <p align="center"><em>Because <code>ls</code> shouldn't need approval</em></p>
 
-This is a fork of [ldayton/Dippy](https://github.com/ldayton/Dippy). See [Diff with origin Dippy](#diff-with-origin-dippy) for what changed.
+This is a fork of [ldayton/Dippy](https://github.com/ldayton/Dippy).
+
+## Diff with origin Dippy
+
+This fork adds the following changes on top of [ldayton/Dippy](https://github.com/ldayton/Dippy):
+
+### Script Unfolding
+
+When Claude runs `bash script.sh`, Dippy reads and analyzes every command inside the script instead of blindly approving or blocking. Safe scripts are auto-approved; unsafe ones report exactly which line failed. Supports `bash`/`sh`/`zsh script.sh`, `./script.sh`, and `source script.sh` patterns with depth-limited recursion.
+
+**Performance** (tested on MacBook M1 Pro)
+
+| Script size  | Time      |
+| ------------ | --------- |
+| 100 lines    | ~16 ms    |
+| 500 lines    | ~80 ms    |
+| 1,000 lines  | ~160 ms   |
+| 2,000 lines  | ~320 ms   |
+| 5,000 lines  | ~800 ms   |
+| 10,000 lines | ~1,600 ms |
+
+### Dangerous Module Explanations
+
+When the Python handler flags a dangerous import, the message now explains **why** the module is flagged. This helps LLMs understand the risk and choose alternatives on their own.
+
+Before:
+```
+dangerous module: xml.etree.ElementTree
+```
+
+After:
+```
+dangerous module: xml.etree.ElementTree — vulnerable to XXE and billion-laughs XML bomb attacks
+```
+
+Every module in the dangerous list has a reason: code execution, file I/O, network access, XXE vulnerabilities, etc.
+
+### `allow-python-module` Directive
+
+Per-module override for the Python handler's import checks. Instead of `allow python3 *` (which bypasses ALL analysis), you can selectively allow specific modules:
+
+```
+allow-python-module xml.etree.ElementTree
+allow-python-module pathlib
+allow-python-module configparser
+```
+
+Allowing a root module covers all its submodules — `allow-python-module xml` also allows `xml.etree`, `xml.sax`, etc. Other safety checks (eval, dangerous attrs, unknown modules) remain active.
+
+### Test Coverage
+
+This fork adds extensive tests for the analyzer, statusline, config, and CLI handlers — more than doubling the coverage of core modules.
+
+|  | Origin | Fork |
+|--|--------|------|
+| **Tests** | 10,874 | 11,310 |
+| **Statement coverage** (excl. vendor) | 84% | 95% |
+
+Key module comparison (statement coverage):
+
+| Module | Origin | Fork |
+|--------|--------|------|
+| `core/analyzer.py` | 88% | 99% |
+| `core/config.py` | 90% | 99% |
+| `core/parser.py` | 65% | 97% |
+| `core/sql.py` | 95% | 98% |
+| `dippy.py` | 76% | 99% |
+| `dippy_statusline.py` | 0% | 99% |
 
 ---
 
@@ -94,64 +157,27 @@ deny rm -rf "Use trash instead"
 deny-redirect **/.env* "Never write secrets, ask me to do it"
 ```
 
-Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root.
+Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root. To get started, copy an example config to the right location:
 
-**Full documentation:** [Dippy Wiki](https://github.com/ldayton/Dippy/wiki)
+```bash
+# Global (applies to all projects)
+cp docs/example-global-config ~/.dippy/config
+
+# Per-project (overrides global for this repo)
+cp docs/example-global-config .dippy
+```
+
+**References:**
+- [Built-in defaults](docs/built-in-defaults.md) — what Dippy auto-approves out of the box
+- [Example Bash config](docs/example-global-config) — shell command allow/deny rules
+- [Example MCP config](docs/example-mcp-config) — MCP tool allow/deny rules (append to your config)
+- [Dippy Wiki](https://github.com/ldayton/Dippy/wiki) — full documentation
 
 ---
 
 ## Extensions
 
 See the [wiki](https://github.com/ldayton/Dippy/wiki) for additional capabilities. Fork-specific extensions are listed in [Diff with origin Dippy](#diff-with-origin-dippy).
-
----
-
-## Diff with origin Dippy
-
-This fork adds the following changes on top of [ldayton/Dippy](https://github.com/ldayton/Dippy):
-
-### Script Unfolding
-
-When Claude runs `bash script.sh`, Dippy reads and analyzes every command inside the script instead of blindly approving or blocking. Safe scripts are auto-approved; unsafe ones report exactly which line failed. Supports `bash`/`sh`/`zsh script.sh`, `./script.sh`, and `source script.sh` patterns with depth-limited recursion.
-
-**Performance** (tested on MacBook M1 Pro) — analysis scales linearly (~0.16 ms/line):
-
-| Script size | Time |
-|-------------|------|
-| 100 lines | ~16 ms |
-| 500 lines | ~80 ms |
-| 1,000 lines | ~160 ms |
-| 2,000 lines | ~320 ms |
-| 5,000 lines | ~800 ms |
-| 10,000 lines | ~1,600 ms |
-
-### Dangerous Module Explanations
-
-When the Python handler flags a dangerous import, the message now explains **why** the module is flagged. This helps LLMs understand the risk and choose alternatives on their own.
-
-Before:
-```
-dangerous module: xml.etree.ElementTree
-```
-
-After:
-```
-dangerous module: xml.etree.ElementTree — vulnerable to XXE and billion-laughs XML bomb attacks
-```
-
-Every module in the dangerous list has a reason: code execution, file I/O, network access, XXE vulnerabilities, etc.
-
-### `allow-python-module` Directive
-
-Per-module override for the Python handler's import checks. Instead of `allow python3 *` (which bypasses ALL analysis), you can selectively allow specific modules:
-
-```
-allow-python-module xml.etree.ElementTree
-allow-python-module pathlib
-allow-python-module configparser
-```
-
-Allowing a root module covers all its submodules — `allow-python-module xml` also allows `xml.etree`, `xml.sax`, etc. Other safety checks (eval, dangerous attrs, unknown modules) remain active.
 
 ---
 

@@ -35,6 +35,15 @@ TESTS = [
     ("script -q /dev/null npm install", False),
     ("script /tmp/out.log python script.py", False),
     ("script -q /dev/null bash -c 'rm -rf /'", False),
+    #
+    # === SAFE: With -- separator ===
+    ("script -q -- /dev/null ls", True),
+    #
+    # === SAFE: Recording with -a flag but safe inner command ===
+    ("script -a /tmp/out.txt ls", True),
+    #
+    # === UNSAFE: script with -t flag (timing file takes arg) ===
+    ("script -t /tmp/timing /tmp/out.txt", False),  # no inner command, interactive
 ]
 
 

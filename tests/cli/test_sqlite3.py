@@ -59,6 +59,8 @@ TESTS = [
     ("sqlite3 -newline '\\n' mydb.db 'SELECT 1'", True),
     # -lookaside takes TWO arguments (SIZE N)
     ("sqlite3 -lookaside 100 50 mydb.db 'SELECT 1'", True),
+    # Write query: INSERT
+    ("sqlite3 db.sqlite 'INSERT INTO t VALUES(1)'", False),
 ]
 
 

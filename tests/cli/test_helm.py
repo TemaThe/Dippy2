@@ -270,6 +270,37 @@ TESTS = [
     ("helm --namespace production list", True),
     ("helm --kube-context dev list", True),
     ("helm list --debug", True),  # Flag after subcommand
+    #
+    # === Requested additions ===
+    #
+    ("helm install myrelease chart", False),  # install is unsafe
+    ("helm upgrade myrelease chart", False),  # upgrade is unsafe
+    ("helm delete myrelease", False),  # delete (alias for uninstall) is unsafe
+    ("helm rollback myrelease", False),  # rollback is unsafe
+    #
+    # === Nested commands with unknown subcommand ===
+    #
+    ("helm dependency unknownsub", False),  # unknown sub -> ask
+    ("helm dep unknownsub", False),
+    ("helm plugin unknownsub", False),
+    ("helm repo unknownsub", False),
+    #
+    # === Nested commands with no subcommand ===
+    #
+    ("helm dependency", False),  # no sub -> ask
+    ("helm repo", False),
+    ("helm plugin", False),
+    ("helm registry", False),
+    #
+    # === delete/del/un aliases display correctly ===
+    #
+    ("helm del myrelease", False),  # del alias for uninstall
+    ("helm un myrelease", False),  # un alias for uninstall
+    #
+    # === Global flags with argument consuming ===
+    #
+    ("helm --namespace production --kube-context dev install myrelease chart", False),
+    ("helm -n prod status myrelease", True),
 ]
 
 

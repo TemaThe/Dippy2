@@ -359,6 +359,41 @@ TESTS = [
     ("gcloud compute instances", False),  # incomplete - no action
     ("gcloud compute", False),  # incomplete - no resource or action
     ("gcloud", False),  # incomplete - no command at all
+    #
+    # === BARE / UNKNOWN SUBCOMMAND ===
+    #
+    ("gcloud somethingxyz", False),  # unknown subcommand -> ask
+    ("gcloud compute instances describe i-123", True),  # describe is safe
+    #
+    # === gsutil commands ===
+    #
+    ("gsutil ls gs://mybucket", True),
+    ("gsutil cat gs://mybucket/file.txt", True),
+    ("gsutil stat gs://mybucket/file.txt", True),
+    ("gsutil du gs://mybucket", True),
+    ("gsutil hash gs://mybucket/file.txt", True),
+    ("gsutil version", True),
+    ("gsutil help", True),
+    ("gsutil cp gs://src gs://dst", False),  # cp is not in safe list
+    ("gsutil rm gs://mybucket/file.txt", False),  # rm is not in safe list
+    ("gsutil mb gs://mybucket", False),  # mb is not in safe list
+    ("gsutil", False),  # bare gsutil -> ask (len < 2 check -> False)
+    ("gsutil -m", False),  # only flags, no action found
+    #
+    # === gcloud with only flags (no parts extracted) ===
+    #
+    ("gcloud --project=foo", False),  # no command parts -> ask
+    #
+    # === gcloud config (edge cases) ===
+    #
+    ("gcloud config", True),  # bare config -> allow (falls through to allow)
+    ("gcloud config configurations list", True),
+    ("gcloud config configurations delete myconfig", False),
+    #
+    # === gcloud projects edge cases ===
+    #
+    ("gcloud projects", True),  # bare projects -> allow
+    ("gcloud projects update myproject", False),
 ]
 
 

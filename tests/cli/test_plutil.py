@@ -17,6 +17,10 @@ TESTS = [
     ("plutil -insert key -string value file.plist", False),
     ("plutil -replace key -string newvalue file.plist", False),
     ("plutil -remove key file.plist", False),
+    #
+    # Safe: unknown/invalid flags don't trigger unsafe actions
+    ("plutil -xyz file.plist", True),
+    ("plutil --help", True),
 ]
 
 

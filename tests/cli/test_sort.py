@@ -71,6 +71,8 @@ TESTS = [
     ("sort file.txt -o output.txt", False),  # -o in middle
     ("sort -n -o output.txt file.txt", False),  # with other flags
     ("sort -u -o sorted.txt file.txt", False),
+    # Output to file (long flag with =)
+    ("sort -o out.txt in.txt", False),
 ]
 
 

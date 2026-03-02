@@ -26,6 +26,13 @@ TESTS = [
     ("yq --inplace=true '.key = \"value\"' file.yaml", False),
     ("yq '.key = \"value\"' -i file.yaml", False),
     ("yq eval -i '.key = \"value\"' file.yaml", False),
+    #
+    # === SAFE: Various output formats ===
+    ("yq -o xml file.yaml", True),
+    ("yq -o props file.yaml", True),
+    #
+    # === UNSAFE: In-place with output format ===
+    ("yq -i -o json '.key = \"val\"' file.yaml", False),
 ]
 
 

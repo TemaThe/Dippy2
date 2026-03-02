@@ -510,6 +510,31 @@ TESTS = [
     ("podman-compose up", False),
     ("podman-compose down", False),
     ("podman-compose exec web bash", False),
+    #
+    # === BARE COMMAND (no args) ===
+    #
+    ("docker", False),  # bare docker -> ask
+    ("podman", False),
+    #
+    # === export/save with -o flag writes to file (unsafe) ===
+    #
+    ("docker export -o f.tar container", False),  # -o writes to file
+    ("docker export --output=f.tar container", False),
+    ("docker save -o image.tar myimage", False),
+    ("docker save --output image.tar myimage", False),
+    #
+    # === buildx imagetools nested subcommands ===
+    #
+    ("docker buildx imagetools", False),  # no sub-subcommand -> ask
+    ("docker buildx imagetools create myimage", False),  # not "inspect" -> ask
+    #
+    # === docker compose with no action (just flags) ===
+    #
+    ("docker compose -f docker-compose.yml", False),  # no action found -> ask
+    #
+    # === docker with only global flags (no action found) ===
+    #
+    ("docker --tls", False),  # only boolean global flag, no action
 ]
 
 

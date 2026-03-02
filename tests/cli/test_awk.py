@@ -139,6 +139,23 @@ TESTS = [
     ("gawk --version", True),
     ("gawk -V", True),
     ("mawk -W version", True),
+    #
+    # === BARE COMMAND (no args) ===
+    #
+    ("awk", True),  # bare awk with no args -> allow (no program)
+    ("gawk", True),
+    #
+    # === EDGE: system() in awk program ===
+    #
+    ("awk '{system(\"whoami\")}' file.txt", False),
+    #
+    # === EDGE: -v flag with value consuming next token ===
+    #
+    ("awk -v OFS=, '{print $1}' file.txt", True),
+    #
+    # === EDGE: --field-separator= form ===
+    #
+    ("awk --field-separator=, '{print $1}' file.txt", True),
 ]
 
 

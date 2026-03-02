@@ -77,6 +77,12 @@ TESTS = [
     ("packer plugins remove github.com/hashicorp/amazon", False),
     # Edge cases
     ("packer", False),  # No subcommand
+    # fmt with -write=false (read-only)
+    ("packer fmt -write=false f.hcl", True),
+    # plugins install (unsafe - downloads external content)
+    ("packer plugins install github.com/hashicorp/docker", False),
+    # plugins required (safe - read-only listing)
+    ("packer plugins required", True),
 ]
 
 

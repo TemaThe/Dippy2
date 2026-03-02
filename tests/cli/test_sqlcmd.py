@@ -45,6 +45,10 @@ TESTS = [
     ("sqlcmd", False),
     # Multiple statements - unsafe
     ("sqlcmd query 'SELECT 1; SELECT 2'", False),
+    # Interactive sqlcmd with -S (no query, no subcommand after flags) - unsafe
+    ("sqlcmd -S server", False),
+    # Write query via -Q flag
+    ("sqlcmd query -q 'INSERT INTO t VALUES(1)'", False),
 ]
 
 

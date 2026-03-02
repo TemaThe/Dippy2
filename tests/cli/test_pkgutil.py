@@ -31,6 +31,12 @@ TESTS = [
     ("pkgutil --expand package.pkg /tmp/expanded", False),
     ("pkgutil --flatten /tmp/expanded package.pkg", False),
     ("pkgutil --bom package.pkg", False),
+    #
+    # Bare pkgutil (no recognized command, defaults to ask)
+    ("pkgutil", False),
+    #
+    # Volume filter (safe query)
+    ("pkgutil --packages --volume /", True),
 ]
 
 
