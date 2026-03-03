@@ -44,5 +44,14 @@ Thumbs.db
 .ruff_cache/
 
 # Claude Code
-.claude/*
-!.claude/skills/
+.claude/
+CLAUDE.local.md
+
+# Serena
+.serena/
+
+# JetBrains project file
+*.iml
+
+# Local scripts
+start-serena.sh

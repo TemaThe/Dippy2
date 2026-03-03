@@ -267,6 +267,9 @@ allow-redirect **/*.log
 # allow ~/my-projects/**/*.sh
 # allow bash ~/my-projects/**/*.sh
 allow chmod +x **.sh
+# .env files are safe in your project (local dev config, not secrets)
+# This overrides the global deny-redirect **/.env* for this specific path
+# allow-redirect ~/my-projects/.env*
 
 #---- After rules (PostToolUse feedback to AI) ----#
 # after git push * "Re-read the prompt file for next steps"

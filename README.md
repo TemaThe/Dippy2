@@ -1,76 +1,93 @@
 
-<p align="center"><em>Because <code>ls</code> shouldn't need approval</em></p>
-
 This is a fork of [ldayton/Dippy](https://github.com/ldayton/Dippy).
 
-## Diff with origin Dippy
+## Table of Contents
 
-This fork adds the following changes on top of [ldayton/Dippy](https://github.com/ldayton/Dippy):
+- [Configuration](#configuration)
+- [Origin Dippy README](#origin-dippy-readme)
+- [Installation](#installation)
+- [Uninstall](#uninstall)
+- [Diff with origin Dippy](#diff-with-origin-dippy)
 
-### Script Unfolding
+**Docs:**
+- [Built-in defaults](docs/built-in-defaults.md) — ~200 safe commands and 85+ CLI handlers auto-approved with zero config
+- [Example Bash config](docs/example-global-config) — ready-to-use allow/deny rules for shell commands, redirects, and dev tools
+- [Example MCP config](docs/example-mcp-config) — auto-approve rules for MCP tools (Serena, Grafana, GitLab, Playwright, etc.)
 
-When Claude runs `bash script.sh`, Dippy reads and analyzes every command inside the script instead of blindly approving or blocking. Safe scripts are auto-approved; unsafe ones report exactly which line failed. Supports `bash`/`sh`/`zsh script.sh`, `./script.sh`, and `source script.sh` patterns with depth-limited recursion.
+### Why not just Claude's built-in permissions?
 
-**Performance** (tested on MacBook M1 Pro)
+Claude Code's allow settings use simple prefix matching — `allow ls`, `allow git status`. But real commands are compound pipelines, and a single `rm -rf` buried many lines of reads is easy to miss. Dippy parses the full bash AST and flags exactly the dangerous parts:
 
-| Script size  | Time      |
-| ------------ | --------- |
-| 100 lines    | ~16 ms    |
-| 500 lines    | ~80 ms    |
-| 1,000 lines  | ~160 ms   |
-| 2,000 lines  | ~320 ms   |
-| 5,000 lines  | ~800 ms   |
-| 10,000 lines | ~1,600 ms |
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git diff --stat HEAD~3
+cat package.json | jq '.scripts'
++set -euo pipefail
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "detached")
+echo "=== Build Report: $BRANCH ===" | tee /tmp/build-report.log
++GO_VER=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//')
+echo "Node: ${NODE_VER:-missing}, Go: ${GO_VER:-missing}"
+find "$PROJECT_ROOT/src" -name '*.ts' -newer tsconfig.json | wc -l | xargs -I{} echo "Modified TS      + files: {}"
+ +grep -r 'TODO\|FIXME\|HACK' "$PROJECT_ROOT/src" 2>/dev/null | cut -d: -f1 | sort -u | wc -l | xar
+gs -I{} echo "Files with TODOs: {}"
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" config --services 2>/dev/null | while read s
+         +vc; do echo "  service: $svc"; done
+cat "$PROJECT_ROOT/go.mod" | grep -E '^require' -A 999 | grep -v '^)' | tail -n +2 | wc -l | xarg
+         +s -I{} echo "Go dependencies: {}"
+ +npm ls --depth=0 --json 2>/dev/null | jq '.dependencies | length' | xargs -I{} echo "NPM packages
+         +: {}"
+ STALE=$(find "$PROJECT_ROOT" -path '*/node_modules' -prune -o -name '*.log' -mtime +7 -print | he
+         +ad -20)
+if [ -n "$STALE" ]; then
+  echo "Cleaning $(echo "$STALE" | wc -l | tr -d ' ') stale files..."
+  echo "$STALE" | xargs -I{} sh -c 'cat /dev/null > "{}"'
+find src -name '*.ts' -newer tsconfig.json | wc -l | xargs -I{} echo "modified: {}"
+NODE_VER=$(node --version | sed 's/v//');rm -rf dist .cache build/tmp; echo "node: $NODE_VER"; 
+docker compose config --services 2>/dev/null | while read svc; do echo "  service: $svc"; done ;cat go.mod | grep -E '^require' -A 999 | grep -v '^)' | tail -n +2 | wc -l | xargs -I{} echo "go deps: {}"; npm ls --depth=0 --json 2>/dev/null | jq '.dependencies | length' | xargs -I{} echo "npm packages: {}"; 
 
-### Dangerous Module Explanations
-
-When the Python handler flags a dangerous import, the message now explains **why** the module is flagged. This helps LLMs understand the risk and choose alternatives on their own.
-
-Before:
+npm run build 2>&1 | tail -20
+git log --oneline -10
 ```
-dangerous module: xml.etree.ElementTree
-```
 
-After:
-```
-dangerous module: xml.etree.ElementTree — vulnerable to XXE and billion-laughs XML bomb attacks
-```
-
-Every module in the dangerous list has a reason: code execution, file I/O, network access, XXE vulnerabilities, etc.
-
-### `allow-python-module` Directive
-
-Per-module override for the Python handler's import checks. Instead of `allow python3 *` (which bypasses ALL analysis), you can selectively allow specific modules:
+Dippy's output:
 
 ```
-allow-python-module xml.etree.ElementTree
-allow-python-module pathlib
-allow-python-module configparser
+Decision: ask
+Reason:   rm -rf dist .cache build/tmp
+```
+You 
+
+
+## Configuration
+
+Dippy is highly customizable. Beyond simple allow/deny rules, you can attach messages that steer the AI back on track when it goes astray—no wasted turns.
+
+```
+deny python "Use uv run python, which runs in project environment"
+deny rm -rf "Use trash instead"
+deny-redirect **/.env* "Never write secrets, ask me to do it"
 ```
 
-Allowing a root module covers all its submodules — `allow-python-module xml` also allows `xml.etree`, `xml.sax`, etc. Other safety checks (eval, dangerous attrs, unknown modules) remain active.
+Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root. To get started, copy an example config to the right location:
 
-### Test Coverage
+```bash
+# Global (applies to all projects)
+cp docs/example-global-config ~/.dippy/config
 
-This fork adds extensive tests for the analyzer, statusline, config, and CLI handlers — more than doubling the coverage of core modules.
+# Per-project (overrides global for this repo)
+cp docs/example-global-config .dippy
+```
 
-|  | Origin | Fork |
-|--|--------|------|
-| **Tests** | 10,874 | 11,310 |
-| **Statement coverage** (excl. vendor) | 84% | 95% |
-
-Key module comparison (statement coverage):
-
-| Module | Origin | Fork |
-|--------|--------|------|
-| `core/analyzer.py` | 88% | 99% |
-| `core/config.py` | 90% | 99% |
-| `core/parser.py` | 65% | 97% |
-| `core/sql.py` | 95% | 98% |
-| `dippy.py` | 76% | 99% |
-| `dippy_statusline.py` | 0% | 99% |
+**References:**
+- [Built-in defaults](docs/built-in-defaults.md) — what Dippy auto-approves out of the box
+- [Example Bash config](docs/example-global-config) — shell command allow/deny rules
+- [Example MCP config](docs/example-mcp-config) — MCP tool allow/deny rules (append to your config)
+- [Dippy Wiki](https://github.com/ldayton/Dippy/wiki) — full documentation
 
 ---
+
+## Origin Dippy README
 
 > **Stop the permission fatigue.** Claude Code asks for approval on every `ls`, `git status`, and `cat` - destroying your flow state. You check Slack, come back, and your assistant's just sitting there waiting.
 
@@ -147,40 +164,6 @@ If you installed manually, use the full path instead: `/path/to/Dippy/bin/dippy-
 
 ---
 
-## Configuration
-
-Dippy is highly customizable. Beyond simple allow/deny rules, you can attach messages that steer the AI back on track when it goes astray—no wasted turns.
-
-```
-deny python "Use uv run python, which runs in project environment"
-deny rm -rf "Use trash instead"
-deny-redirect **/.env* "Never write secrets, ask me to do it"
-```
-
-Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root. To get started, copy an example config to the right location:
-
-```bash
-# Global (applies to all projects)
-cp docs/example-global-config ~/.dippy/config
-
-# Per-project (overrides global for this repo)
-cp docs/example-global-config .dippy
-```
-
-**References:**
-- [Built-in defaults](docs/built-in-defaults.md) — what Dippy auto-approves out of the box
-- [Example Bash config](docs/example-global-config) — shell command allow/deny rules
-- [Example MCP config](docs/example-mcp-config) — MCP tool allow/deny rules (append to your config)
-- [Dippy Wiki](https://github.com/ldayton/Dippy/wiki) — full documentation
-
----
-
-## Extensions
-
-See the [wiki](https://github.com/ldayton/Dippy/wiki) for additional capabilities. Fork-specific extensions are listed in [Diff with origin Dippy](#diff-with-origin-dippy).
-
----
-
 ## Uninstall
 
 Remove the hook entry from `~/.claude/settings.json`, then:
@@ -188,3 +171,72 @@ Remove the hook entry from `~/.claude/settings.json`, then:
 ```bash
 brew uninstall dippy2  # if installed via Homebrew
 ```
+
+---
+
+## Diff with origin Dippy
+
+This fork adds the following changes on top of [ldayton/Dippy](https://github.com/ldayton/Dippy):
+
+### Script Unfolding
+
+When Claude runs `bash script.sh`, Dippy reads and analyzes every command inside the script instead of blindly approving or blocking. Safe scripts are auto-approved; unsafe ones report exactly which line failed. Supports `bash`/`sh`/`zsh script.sh`, `./script.sh`, and `source script.sh` patterns with depth-limited recursion.
+
+**Performance** (tested on MacBook M1 Pro)
+
+| Script size  | Time      |
+| ------------ | --------- |
+| 100 lines    | ~16 ms    |
+| 500 lines    | ~80 ms    |
+| 1,000 lines  | ~160 ms   |
+| 2,000 lines  | ~320 ms   |
+| 5,000 lines  | ~800 ms   |
+| 10,000 lines | ~1,600 ms |
+
+### Dangerous Module Explanations
+
+When the Python handler flags a dangerous import, the message now explains **why** the module is flagged. This helps LLMs understand the risk and choose alternatives on their own.
+
+Before:
+```
+dangerous module: xml.etree.ElementTree
+```
+
+After:
+```
+dangerous module: xml.etree.ElementTree — vulnerable to XXE and billion-laughs XML bomb attacks
+```
+
+Every module in the dangerous list has a reason: code execution, file I/O, network access, XXE vulnerabilities, etc.
+
+### `allow-python-module` Directive
+
+Per-module override for the Python handler's import checks. Instead of `allow python3 *` (which bypasses ALL analysis), you can selectively allow specific modules:
+
+```
+allow-python-module xml.etree.ElementTree
+allow-python-module pathlib
+allow-python-module configparser
+```
+
+Allowing a root module covers all its submodules — `allow-python-module xml` also allows `xml.etree`, `xml.sax`, etc. Other safety checks (eval, dangerous attrs, unknown modules) remain active.
+
+### Test Coverage
+
+This fork adds extensive tests for the analyzer, statusline, config, and CLI handlers — more than doubling the coverage of core modules.
+
+|  | Origin | Fork |
+|--|--------|------|
+| **Tests** | 10,874 | 11,310 |
+| **Statement coverage** (excl. vendor) | 84% | 95% |
+
+Key module comparison (statement coverage):
+
+| Module | Origin | Fork |
+|--------|--------|------|
+| `core/analyzer.py` | 88% | 99% |
+| `core/config.py` | 90% | 99% |
+| `core/parser.py` | 65% | 97% |
+| `core/sql.py` | 95% | 98% |
+| `dippy.py` | 76% | 99% |
+| `dippy_statusline.py` | 0% | 99% |
