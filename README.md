@@ -1,3 +1,7 @@
+---
+created: 2026-03-03T15:03
+updated: 2026-03-03T15:11
+---
 
 This is a fork of [ldayton/Dippy](https://github.com/ldayton/Dippy).
 
@@ -67,6 +71,27 @@ Dippy is highly customizable. Beyond simple allow/deny rules, you can attach mes
 deny python "Use uv run python, which runs in project environment"
 deny rm -rf "Use trash instead"
 deny-redirect **/.env* "Never write secrets, ask me to do it"
+```
+
+**Recommended: deny `python -c`**
+
+`python -c '...'` is hard to safely parse — arbitrary code in a string argument. Instead of trying to analyze it, deny it with a helpful message so the AI writes a proper `.py` file (which Dippy can then analyze line by line):
+
+```
+deny python -c "Write code to a .py file in ./tmp, then run: python ./tmp/<file>.py"
+deny python3 -c "Write code to a .py file in ./tmp, then run: python3 ./tmp/<file>.py"
+deny uv run python -c "Write code to a .py file in ./tmp, then run: uv run python ./tmp/<file>.py"
+```
+
+To let the AI write to `tmp/` without prompts, add to `~/.claude/settings.json` permissions:
+```json
+"Write(**/tmp/**)",
+"Edit(**/tmp/**)"
+```
+
+Also add to your `CLAUDE.md` (global or per-project) so the AI knows upfront:
+```
+Never use `python -c` or `python3 -c`. Write a .py file and run it with `python <file>.py` or `python3 <file>.py`.
 ```
 
 Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root. To get started, copy an example config to the right location:
