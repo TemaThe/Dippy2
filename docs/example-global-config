@@ -98,6 +98,9 @@ allow kubectl debug
 allow kubectl port-forward
 
 #---- Shell builtins (not in built-in allowlist) ----#
+# absolute path variants (Dippy matches "cat" but not "/bin/cat")
+allow /bin/cat *
+allow /usr/bin/cat *
 allow export
 allow break|
 allow continue|
