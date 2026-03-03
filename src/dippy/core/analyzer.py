@@ -98,9 +98,7 @@ def _analyze_node(
     elif kind == "pipeline":
         # All commands in pipeline must be safe
         decisions = [
-            _analyze_node(
-                cmd, config, cwd, remote=remote, _unfold_depth=_unfold_depth
-            )
+            _analyze_node(cmd, config, cwd, remote=remote, _unfold_depth=_unfold_depth)
             for cmd in node.commands
         ]
         result = _combine(decisions)
@@ -133,20 +131,29 @@ def _analyze_node(
     elif kind == "if":
         decisions = [
             _analyze_node(
-                node.condition, config, cwd, remote=remote,
+                node.condition,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         ]
         decisions.append(
             _analyze_node(
-                node.then_body, config, cwd, remote=remote,
+                node.then_body,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         )
         if hasattr(node, "else_body") and node.else_body:
             decisions.append(
                 _analyze_node(
-                    node.else_body, config, cwd, remote=remote,
+                    node.else_body,
+                    config,
+                    cwd,
+                    remote=remote,
                     _unfold_depth=_unfold_depth,
                 )
             )
@@ -161,11 +168,17 @@ def _analyze_node(
     elif kind in ("while", "until"):
         decisions = [
             _analyze_node(
-                node.condition, config, cwd, remote=remote,
+                node.condition,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             ),
             _analyze_node(
-                node.body, config, cwd, remote=remote,
+                node.body,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             ),
         ]
@@ -179,7 +192,10 @@ def _analyze_node(
     elif kind == "for":
         decisions = [
             _analyze_node(
-                node.body, config, cwd, remote=remote,
+                node.body,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         ]
@@ -200,7 +216,10 @@ def _analyze_node(
     elif kind == "for-arith":
         decisions = [
             _analyze_node(
-                node.body, config, cwd, remote=remote,
+                node.body,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         ]
@@ -209,7 +228,10 @@ def _analyze_node(
             if expr:
                 decisions.extend(
                     _analyze_string_cmdsubs(
-                        expr, config, cwd, remote=remote,
+                        expr,
+                        config,
+                        cwd,
+                        remote=remote,
                         _unfold_depth=_unfold_depth,
                     )
                 )
@@ -223,7 +245,10 @@ def _analyze_node(
     elif kind == "select":
         decisions = [
             _analyze_node(
-                node.body, config, cwd, remote=remote,
+                node.body,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         ]
@@ -247,7 +272,10 @@ def _analyze_node(
         if hasattr(node, "word") and node.word:
             decisions.extend(
                 _analyze_word_parts(
-                    node.word, config, cwd, remote=remote,
+                    node.word,
+                    config,
+                    cwd,
+                    remote=remote,
                     _unfold_depth=_unfold_depth,
                 )
             )
@@ -255,7 +283,10 @@ def _analyze_node(
             if hasattr(pattern, "body") and pattern.body:
                 decisions.append(
                     _analyze_node(
-                        pattern.body, config, cwd, remote=remote,
+                        pattern.body,
+                        config,
+                        cwd,
+                        remote=remote,
                         _unfold_depth=_unfold_depth,
                     )
                 )
@@ -277,7 +308,10 @@ def _analyze_node(
     elif kind == "subshell":
         decisions = [
             _analyze_node(
-                node.body, config, cwd, remote=remote,
+                node.body,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         ]
@@ -291,7 +325,10 @@ def _analyze_node(
     elif kind == "brace-group":
         decisions = [
             _analyze_node(
-                node.body, config, cwd, remote=remote,
+                node.body,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         ]
@@ -326,7 +363,10 @@ def _analyze_node(
         if hasattr(node, "body") and node.body:
             decisions.extend(
                 _analyze_cond_node(
-                    node.body, config, cwd, remote=remote,
+                    node.body,
+                    config,
+                    cwd,
+                    remote=remote,
                     _unfold_depth=_unfold_depth,
                 )
             )
@@ -342,7 +382,10 @@ def _analyze_node(
         decisions = []
         for cmdsub in _find_cmdsubs_in_arith(node.expression):
             inner_decision = _analyze_node(
-                cmdsub.command, config, cwd, remote=remote,
+                cmdsub.command,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
             if inner_decision.action != "allow":
@@ -415,7 +458,10 @@ def _analyze_command(
             if part_kind == "procsub":
                 # Process substitution: <(...) or >(...)
                 inner_decision = _analyze_node(
-                    part.command, config, cwd, remote=remote,
+                    part.command,
+                    config,
+                    cwd,
+                    remote=remote,
                     _unfold_depth=_unfold_depth,
                 )
                 if inner_decision.action != "allow":
@@ -429,7 +475,10 @@ def _analyze_command(
             elif part_kind == "cmdsub":
                 # Command substitution: $(...)
                 inner_decision = _analyze_node(
-                    part.command, config, cwd, remote=remote,
+                    part.command,
+                    config,
+                    cwd,
+                    remote=remote,
                     _unfold_depth=_unfold_depth,
                 )
                 if inner_decision.action != "allow":
@@ -448,7 +497,12 @@ def _analyze_command(
                     and position > base_idx
                 ):
                     handler = get_handler(base)
-                    outer_result = handler.classify(HandlerContext(words[base_idx:], python_allow_modules=frozenset(config.python_allow_modules)))
+                    outer_result = handler.classify(
+                        HandlerContext(
+                            words[base_idx:],
+                            python_allow_modules=frozenset(config.python_allow_modules),
+                        )
+                    )
                     if outer_result.action != "allow":
                         inner_cmd = _get_word_value(word).strip("$()")
                         return Decision("ask", f"cmdsub injection risk: {inner_cmd}")
@@ -457,7 +511,10 @@ def _analyze_command(
                 arg = getattr(part, "arg", None)
                 if arg and isinstance(arg, str):
                     param_decisions = _analyze_string_cmdsubs(
-                        arg, config, cwd, remote=remote,
+                        arg,
+                        config,
+                        cwd,
+                        remote=remote,
                         _unfold_depth=_unfold_depth,
                     )
                     for pd in param_decisions:
@@ -512,7 +569,10 @@ def _analyze_redirects(
                 if content:
                     decisions.extend(
                         _analyze_string_cmdsubs(
-                            content, config, cwd, remote=remote,
+                            content,
+                            config,
+                            cwd,
+                            remote=remote,
                             _unfold_depth=_unfold_depth,
                         )
                     )
@@ -524,7 +584,10 @@ def _analyze_redirects(
         # Check for cmdsubs in redirect target
         if r.target:
             target_cmdsub_decisions = _analyze_word_parts(
-                r.target, config, cwd, remote=remote,
+                r.target,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
             decisions.extend(target_cmdsub_decisions)
@@ -615,7 +678,10 @@ def _analyze_simple_command(
 
         if j < len(tokens):
             return _analyze_simple_command(
-                tokens[j:], config, cwd, remote=remote,
+                tokens[j:],
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
         return Decision("ask", base)
@@ -630,16 +696,21 @@ def _analyze_simple_command(
 
     # 4.5. Script unfolding
     if not remote:
-        unfold_decision = _try_unfold_script(
-            base, tokens, config, cwd, _unfold_depth
-        )
+        unfold_decision = _try_unfold_script(base, tokens, config, cwd, _unfold_depth)
         if unfold_decision is not None:
             return unfold_decision
 
     # 5. CLI-specific handlers
     handler = get_handler(base)
     if handler:
-        result = handler.classify(HandlerContext(tokens, python_allow_modules=frozenset(config.python_allow_modules)))
+        result = handler.classify(
+            HandlerContext(
+                tokens,
+                python_allow_modules=frozenset(config.python_allow_modules),
+                config=config,
+                cwd=cwd,
+            )
+        )
         desc = result.description or get_description(tokens, base)
         # Check handler-provided redirect targets against config (skip in remote mode)
         if result.redirect_targets and not remote:
@@ -666,7 +737,10 @@ def _analyze_simple_command(
         elif result.action == "delegate" and result.inner_command:
             # Delegate to inner command (e.g., bash -c 'inner')
             inner_decision = analyze(
-                result.inner_command, config, cwd, remote=result.remote,
+                result.inner_command,
+                config,
+                cwd,
+                remote=result.remote,
                 _unfold_depth=_unfold_depth,
             )
             return inner_decision
@@ -737,9 +811,7 @@ def _try_unfold_script(
             return None
 
     path = resolve_script_path(script_arg, cwd)
-    return analyze_script_file(
-        path, config, cwd, remote=False, depth=_unfold_depth
-    )
+    return analyze_script_file(path, config, cwd, remote=False, depth=_unfold_depth)
 
 
 def _is_version_or_help(tokens: list[str]) -> bool:
@@ -868,7 +940,10 @@ def _analyze_word_parts(
         part_kind = getattr(part, "kind", None)
         if part_kind == "cmdsub":
             inner_decision = _analyze_node(
-                part.command, config, cwd, remote=remote,
+                part.command,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
             if inner_decision.action != "allow":
@@ -883,7 +958,10 @@ def _analyze_word_parts(
                 decisions.append(inner_decision)
         elif part_kind == "procsub":
             inner_decision = _analyze_node(
-                part.command, config, cwd, remote=remote,
+                part.command,
+                config,
+                cwd,
+                remote=remote,
                 _unfold_depth=_unfold_depth,
             )
             if inner_decision.action != "allow":
@@ -904,7 +982,10 @@ def _analyze_word_parts(
             if arg and isinstance(arg, str):
                 decisions.extend(
                     _analyze_string_cmdsubs(
-                        arg, config, cwd, remote=remote,
+                        arg,
+                        config,
+                        cwd,
+                        remote=remote,
                         _unfold_depth=_unfold_depth,
                     )
                 )
@@ -941,7 +1022,10 @@ def _analyze_string_cmdsubs(
             if depth == 0:
                 inner_cmd = s[start : j - 1]
                 inner_decision = analyze(
-                    inner_cmd, config, cwd, remote=remote,
+                    inner_cmd,
+                    config,
+                    cwd,
+                    remote=remote,
                     _unfold_depth=_unfold_depth,
                 )
                 if inner_decision.action != "allow":
@@ -966,7 +1050,10 @@ def _analyze_string_cmdsubs(
             if j < len(s):
                 inner_cmd = s[i + 1 : j]
                 inner_decision = analyze(
-                    inner_cmd, config, cwd, remote=remote,
+                    inner_cmd,
+                    config,
+                    cwd,
+                    remote=remote,
                     _unfold_depth=_unfold_depth,
                 )
                 if inner_decision.action != "allow":

@@ -1,6 +1,6 @@
 ---
 created: 2026-03-03T15:03
-updated: 2026-03-03T15:36
+updated: 2026-03-03T21:18
 ---
 
 This is a fork of [ldayton/Dippy](https://github.com/ldayton/Dippy).
@@ -76,7 +76,7 @@ deny-redirect **/.env* "Never write secrets, ask me to do it"
 
 **Recommended: deny `python -c`**
 
-`python -c '...'` is hard to safely parse — arbitrary code in a string argument. Instead of trying to analyze it, deny it with a helpful message so the AI writes a proper `.py` file (which Dippy can then analyze line by line):
+`python -c '...'` is hard to safely parse — arbitrary code in a string argument. Instead of trying to analyze it, deny it with a helpful message so the AI writes a proper `.py` file (which Dippy can then analyze line by line). For JSON parsing in shell scripts, the AI should use `jq` instead:
 
 ```
 deny python -c "Write code to a .py file in ./tmp, then run: python ./tmp/<file>.py"
@@ -92,7 +92,7 @@ To let the AI write to `tmp/` without prompts, add to `~/.claude/settings.json` 
 
 Also add to your `CLAUDE.md` (global or per-project) so the AI knows upfront:
 ```
-Never use `python -c` or `python3 -c`. Write a .py file and run it with `python <file>.py` or `python3 <file>.py`.
+Never use `python -c` or `python3 -c`. Write a .py file and run it with `python <file>.py` or `python3 <file>.py`. For JSON parsing in shell scripts, use `jq` instead.
 ```
 
 Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root. To get started, copy an example config to the right location:
@@ -218,6 +218,19 @@ When Claude runs `bash script.sh`, Dippy reads and analyzes every command inside
 | 2,000 lines  | ~320 ms   |
 | 5,000 lines  | ~800 ms   |
 | 10,000 lines | ~1,600 ms |
+
+### Subprocess Command Extraction
+
+When a Python script calls `subprocess.run()`, `subprocess.call()`, `subprocess.check_output()`, or `subprocess.Popen()`, Dippy extracts the shell command from the arguments and analyzes it against config rules and CLI handlers — the same way it would analyze a direct bash command.
+
+```python
+import subprocess
+subprocess.run(["kubectl", "exec", "-n", "ns", "deploy/foo", "--", "wget", "-qO-", "http://localhost:8080"])
+```
+
+Instead of blindly flagging `.run()` as dangerous, Dippy extracts `kubectl exec -n ns deploy/foo -- wget ...` and routes it through the kubectl handler. Requires `allow-python-module subprocess` in config.
+
+Supports both list form (`["cmd", "arg"]`) and string form (`"cmd arg"`, `shell=True`), plus `import subprocess as sp` aliases. Non-extractable arguments (variables, f-strings, list concatenation) fall back to the default "dangerous method" check.
 
 ### Dangerous Module Explanations
 

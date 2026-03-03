@@ -9,10 +9,13 @@ Each handler module exports:
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Optional, Protocol
+from typing import TYPE_CHECKING, Literal, Optional, Protocol
+
+if TYPE_CHECKING:
+    from dippy.core.config import Config
 
 
 @dataclass(frozen=True)
@@ -21,6 +24,8 @@ class HandlerContext:
 
     tokens: list[str]
     python_allow_modules: frozenset[str] = frozenset()
+    config: Config | None = field(default=None, repr=False)
+    cwd: Path | None = None
 
 
 @dataclass(frozen=True)

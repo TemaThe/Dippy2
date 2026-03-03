@@ -519,7 +519,7 @@ import json
 data = json.loads('{}')
 print(data)
 """
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) == 0
 
     def test_analyze_dangerous_source(self):
@@ -530,7 +530,7 @@ print(data)
 import os
 os.system('ls')
 """
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) > 0
         assert any(v.kind == "import" for v in violations)
 
@@ -541,7 +541,7 @@ os.system('ls')
         source = """
 x = eval("1 + 1")
 """
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) > 0
         assert any(v.kind == "builtin" and "eval" in v.detail for v in violations)
 
@@ -1237,7 +1237,7 @@ class TestUnitAnalysisExtended:
         from dippy.cli.python import analyze_python_source
 
         source = "import xml.etree.ElementTree"
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) > 0
         assert any("xml" in v.detail for v in violations)
 
@@ -1246,7 +1246,7 @@ class TestUnitAnalysisExtended:
         from dippy.cli.python import analyze_python_source
 
         source = "import marshal"
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) > 0
         assert any("marshal" in v.detail for v in violations)
 
@@ -1255,7 +1255,7 @@ class TestUnitAnalysisExtended:
         from dippy.cli.python import analyze_python_source
 
         source = "import tarfile"
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) > 0
         assert any("tarfile" in v.detail for v in violations)
 
@@ -1268,7 +1268,7 @@ def foo():
     pass
 g = foo.__globals__
 """
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) > 0
         assert any("__globals__" in v.detail for v in violations)
 
@@ -1281,7 +1281,7 @@ import sys
 f = sys._getframe()
 g = f.f_globals
 """
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         # Should have at least the sys import violation
         assert len(violations) > 0
 
@@ -1298,7 +1298,7 @@ data = json.dumps({"x": math.pi})
 counts = Counter([1, 2, 2, 3])
 print(data, counts)
 """
-        violations = analyze_python_source(source)
+        violations, _ = analyze_python_source(source)
         assert len(violations) == 0, f"Expected no violations, got {violations}"
 
 
@@ -1420,7 +1420,7 @@ allow-python-module configparser
         from dippy.cli.python import analyze_python_source
 
         source = "import xml.etree.ElementTree"
-        violations = analyze_python_source(
+        violations, _ = analyze_python_source(
             source, user_allowed_modules=frozenset({"xml.etree.ElementTree"})
         )
         assert len(violations) == 0, f"Expected no violations, got {violations}"
@@ -1430,7 +1430,7 @@ allow-python-module configparser
         from dippy.cli.python import analyze_python_source
 
         source = "from xml.etree import ElementTree"
-        violations = analyze_python_source(
+        violations, _ = analyze_python_source(
             source, user_allowed_modules=frozenset({"xml"})
         )
         assert len(violations) == 0, f"Expected no violations, got {violations}"
@@ -1503,3 +1503,323 @@ g = foo.__globals__
         config = Config(python_allow_modules={"xml.etree.ElementTree"})
         result = check(f"python {script}", config=config)
         assert needs_confirmation(result), "__globals__ should still be blocked"
+
+
+class TestSubprocessCommandExtraction:
+    """Tests for extracting and analyzing shell commands from subprocess calls."""
+
+    # --- Unit tests for _extract_subprocess_command ---
+
+    def test_unit_extract_list_literal(self):
+        """Extract command from subprocess.run(["ls", "-la"])."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nsubprocess.run(["ls", "-la"])'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(violations) == 0
+        assert len(embedded) == 1
+        assert "ls" in embedded[0].command
+
+    def test_unit_extract_string_literal(self):
+        """Extract command from subprocess.run("ls -la", shell=True)."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nsubprocess.run("ls -la", shell=True)'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(violations) == 0
+        assert len(embedded) == 1
+        assert embedded[0].command == "ls -la"
+
+    def test_unit_extract_call_method(self):
+        """Extract command from subprocess.call(["echo", "hello"])."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nsubprocess.call(["echo", "hello"])'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(violations) == 0
+        assert len(embedded) == 1
+        assert "echo" in embedded[0].command
+
+    def test_unit_extract_check_output(self):
+        """Extract command from subprocess.check_output(["git", "log"])."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nsubprocess.check_output(["git", "log"])'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(violations) == 0
+        assert len(embedded) == 1
+        assert "git" in embedded[0].command
+
+    def test_unit_extract_popen(self):
+        """Extract command from subprocess.Popen(["docker", "ps"])."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nsubprocess.Popen(["docker", "ps"])'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(violations) == 0
+        assert len(embedded) == 1
+        assert "docker" in embedded[0].command
+
+    def test_unit_extract_alias(self):
+        """Extract command from aliased import: import subprocess as sp."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess as sp\nsp.run(["ls"])'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(violations) == 0
+        assert len(embedded) == 1
+        assert "ls" in embedded[0].command
+
+    def test_unit_extract_multiple_all_safe(self):
+        """Multiple subprocess calls should all be extracted."""
+        from dippy.cli.python import analyze_python_source
+
+        source = (
+            'import subprocess\n'
+            'subprocess.run(["ls"])\n'
+            'subprocess.run(["git", "status"])\n'
+            'subprocess.check_output(["echo", "hello"])\n'
+        )
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(violations) == 0
+        assert len(embedded) == 3
+
+    # --- Non-extractable cases: should fall back to "dangerous method" ---
+
+    def test_unit_variable_arg_not_extractable(self):
+        """subprocess.run(cmd) with variable arg should flag as dangerous."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\ncmd = ["ls"]\nsubprocess.run(cmd)'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(embedded) == 0
+        assert any(v.kind == "method" and "run" in v.detail for v in violations)
+
+    def test_unit_list_concat_not_extractable(self):
+        """subprocess.run(["echo"] + args) should flag as dangerous."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nargs = ["hello"]\nsubprocess.run(["echo"] + args)'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(embedded) == 0
+        assert any(v.kind == "method" for v in violations)
+
+    def test_unit_fstring_not_extractable(self):
+        """subprocess.run(f"ls {d}") should flag as dangerous."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nd = "/tmp"\nsubprocess.run(f"ls {d}", shell=True)'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(embedded) == 0
+        assert any(v.kind == "method" for v in violations)
+
+    def test_unit_function_call_in_list_not_extractable(self):
+        """subprocess.run([get_cmd()]) should flag as dangerous."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\ndef get_cmd(): return "ls"\nsubprocess.run([get_cmd()])'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(embedded) == 0
+        assert any(v.kind == "method" for v in violations)
+
+    def test_unit_shlex_split_not_extractable(self):
+        """subprocess.run(shlex.split("ls")) should flag as dangerous."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nimport shlex\nsubprocess.run(shlex.split("ls -la"))'
+        violations, embedded = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert len(embedded) == 0
+        assert any(v.kind == "method" for v in violations)
+
+    # --- Preserved behavior: unrelated objects/modules ---
+
+    def test_unit_os_system_not_affected(self):
+        """os.system() should still be flagged (not in SUBPROCESS_MODULES)."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import os\nos.system("ls")'
+        violations, _ = analyze_python_source(source)
+        assert any(v.kind == "method" and "system" in v.detail for v in violations)
+
+    def test_unit_unrelated_object_run_still_flagged(self):
+        """my_obj.run() should still be flagged."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nmy_obj.run()'
+        violations, _ = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert any(v.kind == "method" and "run" in v.detail for v in violations)
+
+    def test_unit_without_allow_module_still_flagged(self):
+        """Without allow-python-module, subprocess import should still be flagged."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nsubprocess.run(["ls"])'
+        violations, embedded = analyze_python_source(source)
+        # Import itself is flagged (subprocess is dangerous module)
+        assert any(v.kind == "import" for v in violations)
+        # Command is extracted but the import violation alone blocks the script
+        assert len(embedded) == 1
+
+    def test_unit_reflection_attrs_not_suppressed(self):
+        """Reflection attrs like __globals__ should still be flagged."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'import subprocess\nsubprocess.__globals__'
+        violations, _ = analyze_python_source(
+            source, user_allowed_modules=frozenset({"subprocess"})
+        )
+        assert any(v.kind == "reflection" for v in violations)
+
+    def test_unit_from_import_run_not_affected(self):
+        """from subprocess import run; run() should still flag import."""
+        from dippy.cli.python import analyze_python_source
+
+        source = 'from subprocess import run\nrun(["ls"])'
+        violations, _ = analyze_python_source(source)
+        assert any(v.kind == "import" for v in violations)
+
+    # --- Integration tests: full pipeline with Config ---
+
+    def test_integration_safe_command_allowed(self, check, tmp_path):
+        """subprocess.run(["ls"]) should be allowed when module is allowed."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "safe_subprocess.py"
+        script.write_text('import subprocess\nsubprocess.run(["ls", "-la"])\n')
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert is_approved(result)
+
+    def test_integration_git_status_allowed(self, check, tmp_path):
+        """subprocess.run(["git", "status"]) should be allowed."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "git_subprocess.py"
+        script.write_text('import subprocess\nsubprocess.run(["git", "status"])\n')
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert is_approved(result)
+
+    def test_integration_dangerous_command_blocked(self, check, tmp_path):
+        """subprocess.run(["rm", "-rf", "/"]) should be blocked."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "dangerous_subprocess.py"
+        script.write_text('import subprocess\nsubprocess.run(["rm", "-rf", "/"])\n')
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert needs_confirmation(result)
+
+    def test_integration_kubectl_exec(self, check, tmp_path):
+        """subprocess.run(["kubectl", "exec", ...]) should delegate to handler."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "kubectl_subprocess.py"
+        script.write_text(
+            'import subprocess\n'
+            'subprocess.run(["kubectl", "exec", "-n", "ns", "deploy/foo",\n'
+            '    "--", "wget", "-qO-", "http://localhost:8080"])\n'
+        )
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        # kubectl exec delegates — the inner wget is what matters
+        assert needs_confirmation(result)
+
+    def test_integration_alias_allowed(self, check, tmp_path):
+        """import subprocess as sp; sp.run(["ls"]) should be allowed."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "alias_subprocess.py"
+        script.write_text('import subprocess as sp\nsp.run(["ls", "-la"])\n')
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert is_approved(result)
+
+    def test_integration_string_form_allowed(self, check, tmp_path):
+        """subprocess.run("ls -la", shell=True) should be allowed."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "string_subprocess.py"
+        script.write_text('import subprocess\nsubprocess.run("ls -la", shell=True)\n')
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert is_approved(result)
+
+    def test_integration_multiple_all_safe(self, check, tmp_path):
+        """Multiple safe subprocess calls should all pass."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "multi_subprocess.py"
+        script.write_text(
+            'import subprocess\n'
+            'subprocess.run(["ls"])\n'
+            'subprocess.run(["git", "status"])\n'
+            'subprocess.check_output(["echo", "hello"])\n'
+        )
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert is_approved(result)
+
+    def test_integration_multiple_one_unsafe(self, check, tmp_path):
+        """One unsafe subprocess call among safe ones should block."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "mixed_subprocess.py"
+        script.write_text(
+            'import subprocess\n'
+            'subprocess.run(["ls"])\n'
+            'subprocess.run(["rm", "-rf", "/"])\n'
+            'subprocess.run(["echo", "done"])\n'
+        )
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert needs_confirmation(result)
+
+    def test_integration_variable_arg_blocked(self, check, tmp_path):
+        """Non-extractable subprocess call should block."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "var_subprocess.py"
+        script.write_text('import subprocess\ncmd = ["ls"]\nsubprocess.run(cmd)\n')
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert needs_confirmation(result)
+
+    def test_integration_nested_bash_c(self, check, tmp_path):
+        """subprocess.run(["bash", "-c", "rm -rf /"]) should be blocked."""
+        from dippy.core.config import Config
+
+        script = tmp_path / "nested_subprocess.py"
+        script.write_text(
+            'import subprocess\n'
+            'subprocess.run(["bash", "-c", "rm -rf /"])\n'
+        )
+        config = Config(python_allow_modules={"subprocess"})
+        result = check(f"python {script}", config=config)
+        assert needs_confirmation(result)

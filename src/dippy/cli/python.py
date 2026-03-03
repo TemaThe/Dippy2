@@ -516,6 +516,50 @@ class Violation(NamedTuple):
     detail: str
 
 
+class EmbeddedCommand(NamedTuple):
+    """A shell command extracted from a subprocess call."""
+
+    line: int
+    command: str  # bash command string to analyze
+
+
+# Subprocess execution methods whose arguments contain shell commands
+SUBPROCESS_METHODS = frozenset({"run", "call", "check_call", "check_output", "Popen"})
+# Modules that execute shell commands via their methods
+SUBPROCESS_MODULES = frozenset({"subprocess"})
+
+
+def _extract_subprocess_command(node: ast.Call) -> str | None:
+    """Extract shell command from subprocess.run/call/Popen args.
+
+    Returns command string or None if args are dynamic.
+    Handles: subprocess.run(["cmd", "arg1", ...]) and subprocess.run("cmd arg1 ...")
+    """
+    if not node.args:
+        return None
+
+    first_arg = node.args[0]
+
+    # List form: subprocess.run(["kubectl", "exec", ...])
+    if isinstance(first_arg, ast.List):
+        parts = []
+        for elt in first_arg.elts:
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                parts.append(elt.value)
+            else:
+                return None  # Dynamic element (variable, f-string, etc.)
+        if parts:
+            from dippy.core.bash import bash_join
+
+            return bash_join(parts)
+
+    # String form: subprocess.run("kubectl exec ...", shell=True)
+    if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+        return first_arg.value
+
+    return None  # Dynamic argument
+
+
 class SafetyAnalyzer(ast.NodeVisitor):
     """
     AST visitor that checks Python code for safety.
@@ -524,10 +568,16 @@ class SafetyAnalyzer(ast.NodeVisitor):
     are allowed. Anything unknown is flagged.
     """
 
-    def __init__(self, allow_print: bool = True, user_allowed_modules: frozenset[str] = frozenset()):
+    def __init__(
+        self,
+        allow_print: bool = True,
+        user_allowed_modules: frozenset[str] = frozenset(),
+    ):
         self.violations: list[Violation] = []
+        self.embedded_commands: list[EmbeddedCommand] = []
         self.allow_print = allow_print
         self._user_allowed = user_allowed_modules
+        self._import_map: dict[str, str] = {}  # local_name -> module_name
 
     def _add(self, node: ast.AST, kind: str, detail: str) -> None:
         self.violations.append(
@@ -538,11 +588,7 @@ class SafetyAnalyzer(ast.NodeVisitor):
 
     @staticmethod
     def _dangerous_msg(module: str, root: str) -> str:
-        reason = (
-            _DANGEROUS_REASONS.get(module)
-            or _DANGEROUS_REASONS.get(root)
-            or ""
-        )
+        reason = _DANGEROUS_REASONS.get(module) or _DANGEROUS_REASONS.get(root) or ""
         if reason:
             return f"dangerous module: {module} — {reason}"
         return f"dangerous module: {module}"
@@ -551,6 +597,9 @@ class SafetyAnalyzer(ast.NodeVisitor):
         for alias in node.names:
             module = alias.name
             root = module.split(".")[0]
+
+            # Track import for context-aware subprocess command extraction
+            self._import_map[alias.asname or alias.name] = module
 
             if module in self._user_allowed or root in self._user_allowed:
                 pass  # user explicitly allowed this module
@@ -598,7 +647,21 @@ class SafetyAnalyzer(ast.NodeVisitor):
         elif isinstance(func, ast.Attribute):
             attr = func.attr
             if attr in DANGEROUS_ATTRS:
-                self._add(node, "method", f"dangerous method: {attr}")
+                # Check if this is a subprocess call on a known module
+                if (
+                    attr in SUBPROCESS_METHODS
+                    and isinstance(func.value, ast.Name)
+                    and self._import_map.get(func.value.id, "").split(".")[0]
+                    in SUBPROCESS_MODULES
+                ):
+                    cmd = _extract_subprocess_command(node)
+                    if cmd is not None:
+                        self.embedded_commands.append(EmbeddedCommand(node.lineno, cmd))
+                    else:
+                        # Can't extract command (dynamic args) — flag as before
+                        self._add(node, "method", f"dangerous method: {attr}")
+                else:
+                    self._add(node, "method", f"dangerous method: {attr}")
 
         self.generic_visit(node)
 
@@ -700,63 +763,70 @@ def analyze_python_source(
     source: str,
     allow_print: bool = True,
     user_allowed_modules: frozenset[str] = frozenset(),
-) -> list[Violation]:
+) -> tuple[list[Violation], list[EmbeddedCommand]]:
     """
     Analyze Python source code for safety violations.
 
-    Returns list of violations, empty if code appears safe.
+    Returns (violations, embedded_commands).
+    violations: list of safety violations, empty if code appears safe.
+    embedded_commands: shell commands extracted from subprocess calls to analyze.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError as e:
-        return [Violation(e.lineno or 0, e.offset or 0, "syntax", str(e))]
+        return [Violation(e.lineno or 0, e.offset or 0, "syntax", str(e))], []
 
-    analyzer = SafetyAnalyzer(allow_print=allow_print, user_allowed_modules=user_allowed_modules)
+    analyzer = SafetyAnalyzer(
+        allow_print=allow_print, user_allowed_modules=user_allowed_modules
+    )
     analyzer.visit(tree)
-    return analyzer.violations
+    return analyzer.violations, analyzer.embedded_commands
 
 
 def analyze_python_file(
     path: Path,
     user_allowed_modules: frozenset[str] = frozenset(),
-) -> tuple[bool, str]:
+) -> tuple[bool, str, list[EmbeddedCommand]]:
     """
     Analyze a Python file for safety.
 
-    Returns (is_safe, reason).
+    Returns (is_safe, reason, embedded_commands).
+    embedded_commands: shell commands from subprocess calls to analyze against config.
     """
     if not path.exists():
-        return False, f"file not found: {path}"
+        return False, f"file not found: {path}", []
 
     if not path.is_file():
-        return False, f"not a file: {path}"
+        return False, f"not a file: {path}", []
 
     # Check file extension
     if path.suffix not in (".py", ".pyw"):
-        return False, f"not a Python file: {path.suffix}"
+        return False, f"not a Python file: {path.suffix}", []
 
     # Size limit - don't analyze huge files
     try:
         size = path.stat().st_size
         if size > 100_000:  # 100KB limit
-            return False, "file too large to analyze"
+            return False, "file too large to analyze", []
     except OSError as e:
-        return False, f"cannot stat file: {e}"
+        return False, f"cannot stat file: {e}", []
 
     # Read and analyze
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
-        return False, f"cannot read file: {e}"
+        return False, f"cannot read file: {e}", []
 
-    violations = analyze_python_source(source, user_allowed_modules=user_allowed_modules)
+    violations, embedded = analyze_python_source(
+        source, user_allowed_modules=user_allowed_modules
+    )
 
     if violations:
         # Return first violation as reason
         v = violations[0]
-        return False, f"{v.kind}: {v.detail} (line {v.line})"
+        return False, f"{v.kind}: {v.detail} (line {v.line})", []
 
-    return True, "static analysis passed"
+    return True, "static analysis passed", embedded
 
 
 # === Python Flag Parsing ===
@@ -905,10 +975,24 @@ def classify(ctx: HandlerContext) -> Classification:
         return Classification("ask", description=desc)
 
     # Try to analyze the script
-    is_safe, reason = analyze_python_file(script_path, user_allowed_modules=ctx.python_allow_modules)
+    is_safe, reason, embedded_commands = analyze_python_file(
+        script_path, user_allowed_modules=ctx.python_allow_modules
+    )
 
-    if is_safe:
-        return Classification("allow", description=f"{desc} (analyzed)")
-    else:
+    if not is_safe:
         # Include reason in description so user knows why
         return Classification("ask", description=f"{desc}: {reason}")
+
+    # Analyze embedded subprocess commands against config
+    if embedded_commands and ctx.config and ctx.cwd:
+        from dippy.core.analyzer import analyze as bash_analyze
+
+        for ecmd in embedded_commands:
+            decision = bash_analyze(ecmd.command, ctx.config, ctx.cwd)
+            if decision.action != "allow":
+                return Classification(
+                    "ask",
+                    description=f"{desc}: subprocess (line {ecmd.line}): {decision.reason}",
+                )
+
+    return Classification("allow", description=f"{desc} (analyzed)")
