@@ -12,6 +12,7 @@
 # Comments must be on their own line.
 
 #---- Denied (blocked with AI-readable message) ----#
+deny eval "eval is blocked. Remove eval and run the command directly, or use bash -c"
 deny sudo "sudo is blocked. Running as root is never allowed - find a non-root alternative"
 deny rm -rf /* "Too dangerous - be more specific"
 deny git push --force * "Use --force-with-lease instead"

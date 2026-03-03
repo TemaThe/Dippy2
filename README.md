@@ -1,6 +1,6 @@
 ---
 created: 2026-03-03T15:03
-updated: 2026-03-03T15:11
+updated: 2026-03-03T15:28
 ---
 
 This is a fork of [ldayton/Dippy](https://github.com/ldayton/Dippy).
@@ -68,6 +68,7 @@ You
 Dippy is highly customizable. Beyond simple allow/deny rules, you can attach messages that steer the AI back on track when it goes astray—no wasted turns.
 
 ```
+deny eval "eval is blocked. Remove eval and run the command directly, or use bash -c"
 deny python "Use uv run python, which runs in project environment"
 deny rm -rf "Use trash instead"
 deny-redirect **/.env* "Never write secrets, ask me to do it"
